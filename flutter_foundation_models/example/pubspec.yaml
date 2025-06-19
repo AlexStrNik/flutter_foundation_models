@@ -1,0 +1,24 @@
+name: flutter_foundation_models_example
+description: "Demonstrates how to use the flutter_foundation_models plugin."
+publish_to: "none"
+
+environment:
+  sdk: ^3.5.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_foundation_models:
+    path: ../
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.12
+  flutter_foundation_models_gen:
+    path: ../../flutter_foundation_models_gen
+
+flutter:
+  uses-material-design: true

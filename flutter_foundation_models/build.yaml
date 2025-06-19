@@ -1,0 +1,6 @@
+targets:
+  $default:
+    builders:
+      flutter_foundation_models_gen:
+        generate_for:
+          - "lib/**.dart"
