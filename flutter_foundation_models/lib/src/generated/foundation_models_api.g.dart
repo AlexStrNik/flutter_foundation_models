@@ -25,6 +25,13 @@ List<Object?> wrapResponse({Object? result, PlatformException? error, bool empty
   return <Object?>[error.code, error.message, error.details];
 }
 
+/// Sampling mode for generation
+enum SamplingModeType {
+  greedy,
+  topK,
+  topP,
+}
+
 class ToolDefinitionMessage {
   ToolDefinitionMessage({
     required this.name,
@@ -56,6 +63,73 @@ class ToolDefinitionMessage {
   }
 }
 
+class SamplingModeMessage {
+  SamplingModeMessage({
+    required this.type,
+    this.topK,
+    this.probabilityThreshold,
+    this.seed,
+  });
+
+  SamplingModeType type;
+
+  int? topK;
+
+  double? probabilityThreshold;
+
+  int? seed;
+
+  Object encode() {
+    return <Object?>[
+      type,
+      topK,
+      probabilityThreshold,
+      seed,
+    ];
+  }
+
+  static SamplingModeMessage decode(Object result) {
+    result as List<Object?>;
+    return SamplingModeMessage(
+      type: result[0]! as SamplingModeType,
+      topK: result[1] as int?,
+      probabilityThreshold: result[2] as double?,
+      seed: result[3] as int?,
+    );
+  }
+}
+
+class GenerationOptionsMessage {
+  GenerationOptionsMessage({
+    this.sampling,
+    this.temperature,
+    this.maximumResponseTokens,
+  });
+
+  SamplingModeMessage? sampling;
+
+  double? temperature;
+
+  int? maximumResponseTokens;
+
+  Object encode() {
+    return <Object?>[
+      sampling,
+      temperature,
+      maximumResponseTokens,
+    ];
+  }
+
+  static GenerationOptionsMessage decode(Object result) {
+    result as List<Object?>;
+    return GenerationOptionsMessage(
+      sampling: result[0] as SamplingModeMessage?,
+      temperature: result[1] as double?,
+      maximumResponseTokens: result[2] as int?,
+    );
+  }
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -64,8 +138,17 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    }    else if (value is ToolDefinitionMessage) {
+    }    else if (value is SamplingModeType) {
       buffer.putUint8(129);
+      writeValue(buffer, value.index);
+    }    else if (value is ToolDefinitionMessage) {
+      buffer.putUint8(130);
+      writeValue(buffer, value.encode());
+    }    else if (value is SamplingModeMessage) {
+      buffer.putUint8(131);
+      writeValue(buffer, value.encode());
+    }    else if (value is GenerationOptionsMessage) {
+      buffer.putUint8(132);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -76,7 +159,14 @@ class _PigeonCodec extends StandardMessageCodec {
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
       case 129: 
+        final int? value = readValue(buffer) as int?;
+        return value == null ? null : SamplingModeType.values[value];
+      case 130: 
         return ToolDefinitionMessage.decode(readValue(buffer)!);
+      case 131: 
+        return SamplingModeMessage.decode(readValue(buffer)!);
+      case 132: 
+        return GenerationOptionsMessage.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -96,7 +186,7 @@ class FoundationModelsHostApi {
 
   final String pigeonVar_messageChannelSuffix;
 
-  Future<String> createSession(List<ToolDefinitionMessage> tools) async {
+  Future<String> createSession(List<ToolDefinitionMessage> tools, String? instructions) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createSession$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -104,7 +194,7 @@ class FoundationModelsHostApi {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final List<Object?>? pigeonVar_replyList =
-        await pigeonVar_channel.send(<Object?>[tools]) as List<Object?>?;
+        await pigeonVar_channel.send(<Object?>[tools, instructions]) as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
     } else if (pigeonVar_replyList.length > 1) {
@@ -145,15 +235,15 @@ class FoundationModelsHostApi {
     }
   }
 
-  Future<String> respond(String sessionId, String prompt) async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respond$pigeonVar_messageChannelSuffix';
+  Future<String> respondTo(String sessionId, String prompt, GenerationOptionsMessage? options) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondTo$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final List<Object?>? pigeonVar_replyList =
-        await pigeonVar_channel.send(<Object?>[sessionId, prompt]) as List<Object?>?;
+        await pigeonVar_channel.send(<Object?>[sessionId, prompt, options]) as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
     } else if (pigeonVar_replyList.length > 1) {
@@ -172,15 +262,15 @@ class FoundationModelsHostApi {
     }
   }
 
-  Future<Map<String?, Object?>> respondWithSchema(String sessionId, String prompt, Map<String?, Object?> schema) async {
-    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondWithSchema$pigeonVar_messageChannelSuffix';
+  Future<Map<String?, Object?>> respondToWithSchema(String sessionId, String prompt, Map<String?, Object?> schema, bool includeSchemaInPrompt, GenerationOptionsMessage? options) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondToWithSchema$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final List<Object?>? pigeonVar_replyList =
-        await pigeonVar_channel.send(<Object?>[sessionId, prompt, schema]) as List<Object?>?;
+        await pigeonVar_channel.send(<Object?>[sessionId, prompt, schema, includeSchemaInPrompt, options]) as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
     } else if (pigeonVar_replyList.length > 1) {

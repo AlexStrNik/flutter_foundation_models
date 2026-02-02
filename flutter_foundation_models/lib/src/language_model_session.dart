@@ -6,6 +6,7 @@ import 'package:flutter_foundation_models/src/pigeon_impl/flutter_api_impl.dart'
 
 final class LanguageModelSession {
   final List<Tool> tools;
+  final String? instructions;
 
   static final FlutterApiImpl _flutterApiImpl = FlutterApiImpl();
   static bool _flutterApiSetUp = false;
@@ -14,6 +15,7 @@ final class LanguageModelSession {
 
   LanguageModelSession({
     this.tools = const [],
+    this.instructions,
   }) {
     if (!_flutterApiSetUp) {
       FoundationModelsFlutterApi.setUp(_flutterApiImpl);
@@ -36,7 +38,7 @@ final class LanguageModelSession {
         );
       }).toList();
 
-      final sessionId = await _hostApi.createSession(toolMessages);
+      final sessionId = await _hostApi.createSession(toolMessages, instructions);
       _flutterApiImpl.registerSession(sessionId, tools);
       _initCompleter.complete(sessionId);
     } catch (e) {
@@ -77,23 +79,34 @@ final class LanguageModelSession {
     }
   }
 
-  Future<String> respond({required String to}) async {
+  /// Respond to a prompt with a text response.
+  Future<String> respondTo(
+    String prompt, {
+    GenerationOptions? options,
+  }) async {
     if (_isDisposed) {
       throw Exception('Cannot respond with a disposed LanguageModelSession');
     }
 
     try {
       final sessionId = await _initCompleter.future;
-      final response = await _hostApi.respond(sessionId, to);
+      final response = await _hostApi.respondTo(
+        sessionId,
+        prompt,
+        _convertOptions(options),
+      );
       return response;
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<GeneratedContent> respondWithSchema({
-    required String to,
+  /// Respond to a prompt with structured output according to the schema.
+  Future<GeneratedContent> respondToWithSchema(
+    String prompt, {
     required GenerationSchema schema,
+    bool includeSchemaInPrompt = true,
+    GenerationOptions? options,
   }) async {
     if (_isDisposed) {
       throw Exception('Cannot respond with a disposed LanguageModelSession');
@@ -102,11 +115,45 @@ final class LanguageModelSession {
     try {
       final sessionId = await _initCompleter.future;
       final schemaJson = _convertToNullableKeys(schema.toJson());
-      final response = await _hostApi.respondWithSchema(sessionId, to, schemaJson);
+      final response = await _hostApi.respondToWithSchema(
+        sessionId,
+        prompt,
+        schemaJson,
+        includeSchemaInPrompt,
+        _convertOptions(options),
+      );
       return GeneratedContent(_cleanMapKeys(response));
     } catch (e) {
       rethrow;
     }
+  }
+
+  GenerationOptionsMessage? _convertOptions(GenerationOptions? options) {
+    if (options == null) return null;
+
+    SamplingModeMessage? samplingMessage;
+    final sampling = options.sampling;
+    if (sampling != null) {
+      samplingMessage = switch (sampling) {
+        GreedySamplingMode() => SamplingModeMessage(type: SamplingModeType.greedy),
+        TopKSamplingMode(:final k, :final seed) => SamplingModeMessage(
+            type: SamplingModeType.topK,
+            topK: k,
+            seed: seed,
+          ),
+        TopPSamplingMode(:final probabilityThreshold, :final seed) => SamplingModeMessage(
+            type: SamplingModeType.topP,
+            probabilityThreshold: probabilityThreshold,
+            seed: seed,
+          ),
+      };
+    }
+
+    return GenerationOptionsMessage(
+      sampling: samplingMessage,
+      temperature: options.temperature,
+      maximumResponseTokens: options.maximumResponseTokens,
+    );
   }
 
   Map<String, dynamic> _cleanMapKeys(Map<String?, Object?> map) {

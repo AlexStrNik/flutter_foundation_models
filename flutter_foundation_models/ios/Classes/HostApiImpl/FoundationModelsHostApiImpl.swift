@@ -12,6 +12,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
 
     func createSession(
         tools: [ToolDefinitionMessage],
+        instructions: String?,
         completion: @escaping (Result<String, Error>) -> Void
     ) {
         do {
@@ -24,7 +25,11 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                 )
             }
 
-            sessions[sessionId] = LanguageModelSession(tools: flutterTools)
+            if let instructions = instructions {
+                sessions[sessionId] = LanguageModelSession(tools: flutterTools, instructions: instructions)
+            } else {
+                sessions[sessionId] = LanguageModelSession(tools: flutterTools)
+            }
             completion(.success(sessionId))
         } catch {
             completion(.failure(PigeonError(
@@ -52,9 +57,10 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         completion(.success(()))
     }
 
-    func respond(
+    func respondTo(
         sessionId: String,
         prompt: String,
+        options: GenerationOptionsMessage?,
         completion: @escaping (Result<String, Error>) -> Void
     ) {
         guard let session = sessions[sessionId] else {
@@ -66,9 +72,11 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
             return
         }
 
+        let generationOptions = convertOptions(options)
+
         Task {
             do {
-                let result = try await session.respond(to: prompt)
+                let result = try await session.respond(to: prompt, options: generationOptions)
                 completion(.success(result.content))
             } catch {
                 completion(.failure(PigeonError(
@@ -80,10 +88,12 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         }
     }
 
-    func respondWithSchema(
+    func respondToWithSchema(
         sessionId: String,
         prompt: String,
         schema: [String?: Any?],
+        includeSchemaInPrompt: Bool,
+        options: GenerationOptionsMessage?,
         completion: @escaping (Result<[String?: Any?], Error>) -> Void
     ) {
         guard let session = sessions[sessionId] else {
@@ -96,12 +106,18 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         }
 
         do {
-            let schemaDict = schema.compactMapKeys()
+            let schemaDict = schema.compactMapKeys { $0 }
             let generationSchema = try GenerationSchema.fromJson(schemaDict)
+            let generationOptions = convertOptions(options)
 
             Task {
                 do {
-                    let result = try await session.respond(to: prompt, schema: generationSchema)
+                    let result = try await session.respond(
+                        to: prompt,
+                        schema: generationSchema,
+                        includeSchemaInPrompt: includeSchemaInPrompt,
+                        options: generationOptions
+                    )
                     let jsonData = result.content.jsonString.data(using: .utf8)!
                     let resultJson = try JSONSerialization.jsonObject(with: jsonData)
 
@@ -130,6 +146,47 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                 details: nil
             )))
         }
+    }
+
+    private func convertOptions(_ options: GenerationOptionsMessage?) -> GenerationOptions {
+        guard let options = options else {
+            return GenerationOptions()
+        }
+
+        var sampling: GenerationOptions.SamplingMode? = nil
+        if let samplingMsg = options.sampling {
+            switch samplingMsg.type {
+            case .greedy:
+                sampling = .greedy
+            case .topK:
+                if let k = samplingMsg.topK {
+                    if let seed = samplingMsg.seed {
+                        sampling = .random(top: Int(k), seed: UInt64(seed))
+                    } else {
+                        sampling = .random(top: Int(k))
+                    }
+                }
+            case .topP:
+                if let threshold = samplingMsg.probabilityThreshold {
+                    if let seed = samplingMsg.seed {
+                        sampling = .random(probabilityThreshold: threshold, seed: UInt64(seed))
+                    } else {
+                        sampling = .random(probabilityThreshold: threshold)
+                    }
+                }
+            }
+        }
+
+        var maxTokens: Int? = nil
+        if let max = options.maximumResponseTokens {
+            maxTokens = Int(max)
+        }
+
+        return GenerationOptions(
+            sampling: sampling,
+            temperature: options.temperature,
+            maximumResponseTokens: maxTokens
+        )
     }
 }
 

@@ -24,8 +24,8 @@ class _MyWeatherState extends State<MyWeather> {
   }
 
   Future<void> getWeather() async {
-    final weatherResult = await _session.respond(
-      to: "What is the weather like in New York?",
+    final weatherResult = await _session.respondTo(
+      "What is the weather like in New York?",
     );
 
     setState(() {

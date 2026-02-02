@@ -16,8 +16,8 @@ class _NovelGeneratorState extends State<NovelGenerator> {
 
   Future<void> generateNew() async {
     final schema = $NovelIdeaGenerable.generationSchema;
-    final generatedContent = await _session.respondWithSchema(
-      to: "Generate random novel idea",
+    final generatedContent = await _session.respondToWithSchema(
+      "Generate random novel idea",
       schema: schema,
     );
 

@@ -68,6 +68,13 @@ private func nilOrValue<T>(_ value: Any?) -> T? {
   return value as! T?
 }
 
+/// Sampling mode for generation
+enum SamplingModeType: Int {
+  case greedy = 0
+  case topK = 1
+  case topP = 2
+}
+
 /// Generated class from Pigeon that represents data sent in messages.
 struct ToolDefinitionMessage {
   var name: String
@@ -96,11 +103,81 @@ struct ToolDefinitionMessage {
   }
 }
 
+/// Generated class from Pigeon that represents data sent in messages.
+struct SamplingModeMessage {
+  var type: SamplingModeType
+  var topK: Int64? = nil
+  var probabilityThreshold: Double? = nil
+  var seed: Int64? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> SamplingModeMessage? {
+    let type = pigeonVar_list[0] as! SamplingModeType
+    let topK: Int64? = nilOrValue(pigeonVar_list[1])
+    let probabilityThreshold: Double? = nilOrValue(pigeonVar_list[2])
+    let seed: Int64? = nilOrValue(pigeonVar_list[3])
+
+    return SamplingModeMessage(
+      type: type,
+      topK: topK,
+      probabilityThreshold: probabilityThreshold,
+      seed: seed
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      type,
+      topK,
+      probabilityThreshold,
+      seed,
+    ]
+  }
+}
+
+/// Generated class from Pigeon that represents data sent in messages.
+struct GenerationOptionsMessage {
+  var sampling: SamplingModeMessage? = nil
+  var temperature: Double? = nil
+  var maximumResponseTokens: Int64? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> GenerationOptionsMessage? {
+    let sampling: SamplingModeMessage? = nilOrValue(pigeonVar_list[0])
+    let temperature: Double? = nilOrValue(pigeonVar_list[1])
+    let maximumResponseTokens: Int64? = nilOrValue(pigeonVar_list[2])
+
+    return GenerationOptionsMessage(
+      sampling: sampling,
+      temperature: temperature,
+      maximumResponseTokens: maximumResponseTokens
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      sampling,
+      temperature,
+      maximumResponseTokens,
+    ]
+  }
+}
+
 private class FoundationModelsApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
     case 129:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return SamplingModeType(rawValue: enumResultAsInt)
+      }
+      return nil
+    case 130:
       return ToolDefinitionMessage.fromList(self.readValue() as! [Any?])
+    case 131:
+      return SamplingModeMessage.fromList(self.readValue() as! [Any?])
+    case 132:
+      return GenerationOptionsMessage.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -109,8 +186,17 @@ private class FoundationModelsApiPigeonCodecReader: FlutterStandardReader {
 
 private class FoundationModelsApiPigeonCodecWriter: FlutterStandardWriter {
   override func writeValue(_ value: Any) {
-    if let value = value as? ToolDefinitionMessage {
+    if let value = value as? SamplingModeType {
       super.writeByte(129)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? ToolDefinitionMessage {
+      super.writeByte(130)
+      super.writeValue(value.toList())
+    } else if let value = value as? SamplingModeMessage {
+      super.writeByte(131)
+      super.writeValue(value.toList())
+    } else if let value = value as? GenerationOptionsMessage {
+      super.writeByte(132)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -135,10 +221,10 @@ class FoundationModelsApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Se
 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol FoundationModelsHostApi {
-  func createSession(tools: [ToolDefinitionMessage], completion: @escaping (Result<String, Error>) -> Void)
+  func createSession(tools: [ToolDefinitionMessage], instructions: String?, completion: @escaping (Result<String, Error>) -> Void)
   func destroySession(sessionId: String, completion: @escaping (Result<Void, Error>) -> Void)
-  func respond(sessionId: String, prompt: String, completion: @escaping (Result<String, Error>) -> Void)
-  func respondWithSchema(sessionId: String, prompt: String, schema: [String?: Any?], completion: @escaping (Result<[String?: Any?], Error>) -> Void)
+  func respondTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
+  func respondToWithSchema(sessionId: String, prompt: String, schema: [String?: Any?], includeSchemaInPrompt: Bool, options: GenerationOptionsMessage?, completion: @escaping (Result<[String?: Any?], Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -152,7 +238,8 @@ class FoundationModelsHostApiSetup {
       createSessionChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let toolsArg = args[0] as! [ToolDefinitionMessage]
-        api.createSession(tools: toolsArg) { result in
+        let instructionsArg: String? = nilOrValue(args[1])
+        api.createSession(tools: toolsArg, instructions: instructionsArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -181,13 +268,14 @@ class FoundationModelsHostApiSetup {
     } else {
       destroySessionChannel.setMessageHandler(nil)
     }
-    let respondChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respond\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let respondToChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondTo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      respondChannel.setMessageHandler { message, reply in
+      respondToChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let sessionIdArg = args[0] as! String
         let promptArg = args[1] as! String
-        api.respond(sessionId: sessionIdArg, prompt: promptArg) { result in
+        let optionsArg: GenerationOptionsMessage? = nilOrValue(args[2])
+        api.respondTo(sessionId: sessionIdArg, prompt: promptArg, options: optionsArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -197,16 +285,18 @@ class FoundationModelsHostApiSetup {
         }
       }
     } else {
-      respondChannel.setMessageHandler(nil)
+      respondToChannel.setMessageHandler(nil)
     }
-    let respondWithSchemaChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondWithSchema\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let respondToWithSchemaChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondToWithSchema\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      respondWithSchemaChannel.setMessageHandler { message, reply in
+      respondToWithSchemaChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let sessionIdArg = args[0] as! String
         let promptArg = args[1] as! String
         let schemaArg = args[2] as! [String?: Any?]
-        api.respondWithSchema(sessionId: sessionIdArg, prompt: promptArg, schema: schemaArg) { result in
+        let includeSchemaInPromptArg = args[3] as! Bool
+        let optionsArg: GenerationOptionsMessage? = nilOrValue(args[4])
+        api.respondToWithSchema(sessionId: sessionIdArg, prompt: promptArg, schema: schemaArg, includeSchemaInPrompt: includeSchemaInPromptArg, options: optionsArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -216,7 +306,7 @@ class FoundationModelsHostApiSetup {
         }
       }
     } else {
-      respondWithSchemaChannel.setMessageHandler(nil)
+      respondToWithSchemaChannel.setMessageHandler(nil)
     }
   }
 }
