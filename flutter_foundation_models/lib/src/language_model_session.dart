@@ -10,6 +10,16 @@ import 'package:flutter_foundation_models/src/pigeon_impl/flutter_api_impl.dart'
 /// structured content using Apple's on-device language model. It supports
 /// both one-shot and streaming generation, as well as tool use.
 ///
+/// Before creating a session, check if the API is available:
+/// ```dart
+/// if (await LanguageModelSession.isAvailable()) {
+///   final session = LanguageModelSession();
+///   // Use session...
+/// } else {
+///   // Foundation Models not available on this device
+/// }
+/// ```
+///
 /// Example usage:
 /// ```dart
 /// final session = LanguageModelSession();
@@ -35,6 +45,27 @@ import 'package:flutter_foundation_models/src/pigeon_impl/flutter_api_impl.dart'
 /// );
 /// ```
 final class LanguageModelSession {
+  /// Checks if the Foundation Models API is available on this device.
+  ///
+  /// Returns `true` if the device is running iOS 26+ (or macOS 26+) and
+  /// the FoundationModels framework is available.
+  ///
+  /// Use this to conditionally enable AI features in your app:
+  /// ```dart
+  /// if (await LanguageModelSession.isAvailable()) {
+  ///   // Show AI-powered features
+  /// } else {
+  ///   // Hide or disable AI features
+  /// }
+  /// ```
+  static Future<bool> isAvailable() async {
+    try {
+      return await _hostApi.isAvailable();
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Tools available for the model to use during generation.
   ///
   /// Tools allow the model to call external functions to retrieve information

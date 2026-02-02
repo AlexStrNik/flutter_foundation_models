@@ -51,6 +51,10 @@ class GenerationOptionsMessage {
 
 @HostApi()
 abstract class FoundationModelsHostApi {
+  /// Checks if Foundation Models API is available on this device.
+  /// Returns true if iOS 26+ and the FoundationModels framework is available.
+  bool isAvailable();
+
   @async
   String createSession(List<ToolDefinitionMessage> tools, String? instructions);
 

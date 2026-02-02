@@ -221,6 +221,9 @@ class FoundationModelsApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Se
 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol FoundationModelsHostApi {
+  /// Checks if Foundation Models API is available on this device.
+  /// Returns true if iOS 26+ and the FoundationModels framework is available.
+  func isAvailable() throws -> Bool
   func createSession(tools: [ToolDefinitionMessage], instructions: String?, completion: @escaping (Result<String, Error>) -> Void)
   func destroySession(sessionId: String, completion: @escaping (Result<Void, Error>) -> Void)
   func respondTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
@@ -239,6 +242,21 @@ class FoundationModelsHostApiSetup {
   /// Sets up an instance of `FoundationModelsHostApi` to handle messages through the `binaryMessenger`.
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: FoundationModelsHostApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
+    /// Checks if Foundation Models API is available on this device.
+    /// Returns true if iOS 26+ and the FoundationModels framework is available.
+    let isAvailableChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.isAvailable\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      isAvailableChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.isAvailable()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      isAvailableChannel.setMessageHandler(nil)
+    }
     let createSessionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createSession\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       createSessionChannel.setMessageHandler { message, reply in

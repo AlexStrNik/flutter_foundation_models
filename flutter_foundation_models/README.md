@@ -12,9 +12,11 @@ A Flutter plugin for Apple's on-device Foundation Models, available on iOS 26+ a
 
 ## Requirements
 
-- iOS 26.0+ or macOS 26.0+
+- iOS 16.0+ (Foundation Models API requires iOS 26.0+ at runtime)
 - Flutter 3.22+
-- Xcode 26+
+- Xcode 26+ (for iOS 26 SDK)
+
+**Note:** The package can be added to apps targeting iOS 16+, but the Foundation Models API is only available on iOS 26+. Use `LanguageModelSession.isAvailable()` to check availability at runtime.
 
 ## Installation
 
@@ -31,10 +33,30 @@ dev_dependencies:
 
 ## Quick Start
 
+### Check Availability
+
+Before using Foundation Models, check if the API is available:
+
+```dart
+import 'package:flutter_foundation_models/flutter_foundation_models.dart';
+
+if (await LanguageModelSession.isAvailable()) {
+  // Foundation Models is available, show AI features
+} else {
+  // Not available, hide AI features or show fallback
+}
+```
+
 ### Basic Text Generation
 
 ```dart
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
+
+// Check availability first
+if (!await LanguageModelSession.isAvailable()) {
+  print('Foundation Models not available on this device');
+  return;
+}
 
 final session = LanguageModelSession();
 

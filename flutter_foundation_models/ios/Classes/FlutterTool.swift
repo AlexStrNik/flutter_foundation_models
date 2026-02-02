@@ -1,6 +1,8 @@
+#if canImport(FoundationModels)
 import Foundation
 import FoundationModels
 
+@available(iOS 26.0, *)
 struct FlutterTool: Tool {
     let sessionId: String
     let name: String
@@ -47,7 +49,7 @@ struct FlutterTool: Tool {
                 }
             }
         }
-        
+
         let json = try! JSONSerialization.data(withJSONObject: content, options: [])
         let jsonString = String(data: json, encoding: .utf8)!
 
@@ -76,3 +78,4 @@ private extension Dictionary where Key == String, Value == Any? {
         return result
     }
 }
+#endif

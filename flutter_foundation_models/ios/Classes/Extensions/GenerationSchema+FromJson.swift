@@ -1,3 +1,4 @@
+#if canImport(FoundationModels)
 import Foundation
 import FoundationModels
 
@@ -10,6 +11,7 @@ enum GenerationSchemaError: Error {
     case invalidSchema(String)
 }
 
+@available(iOS 26.0, *)
 extension GenerationSchema {
     static func fromJson(
         _ json: [String: Any]
@@ -28,6 +30,7 @@ extension GenerationSchema {
     }
 }
 
+@available(iOS 26.0, *)
 extension DynamicGenerationSchema {
     fileprivate static func fromJson(
         _ json: JSON
@@ -215,6 +218,7 @@ extension DynamicGenerationSchema {
     }
 }
 
+@available(iOS 26.0, *)
 extension DynamicGenerationSchema.Property {
     fileprivate static func fromJson(
         _ json: JSON
@@ -238,3 +242,4 @@ extension DynamicGenerationSchema.Property {
         )
     }
 }
+#endif
