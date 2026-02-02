@@ -27,6 +27,7 @@ final class LanguageModelSession {
 
   final Completer<String> _initCompleter = Completer<String>();
   bool _isDisposed = false;
+  final Set<String> _activeStreams = {};
 
   Future<void> _initInBackground() async {
     try {
@@ -68,6 +69,15 @@ final class LanguageModelSession {
 
   Future<void> dispose() async {
     if (_isDisposed) return;
+
+    // Cancel all active streams
+    for (final streamId in _activeStreams.toList()) {
+      try {
+        await _hostApi.cancelStream(streamId);
+      } catch (_) {}
+      _flutterApiImpl.unregisterStream(streamId);
+    }
+    _activeStreams.clear();
 
     try {
       final sessionId = await _initCompleter.future;
@@ -125,6 +135,93 @@ final class LanguageModelSession {
       return GeneratedContent(_cleanMapKeys(response));
     } catch (e) {
       rethrow;
+    }
+  }
+
+  /// Stream a response with structured output according to the schema.
+  /// Returns a Stream of partial content as the model generates.
+  Stream<GeneratedContent> streamResponseToWithSchema(
+    String prompt, {
+    required GenerationSchema schema,
+    bool includeSchemaInPrompt = true,
+    GenerationOptions? options,
+  }) {
+    if (_isDisposed) {
+      throw Exception('Cannot stream with a disposed LanguageModelSession');
+    }
+
+    // Create a stream controller to emit snapshots
+    late StreamController<GeneratedContent> controller;
+
+    controller = StreamController<GeneratedContent>(
+      onCancel: () async {
+        // When the stream subscription is cancelled, cancel the native stream
+        final streamId = controller.hashCode.toString();
+        if (_activeStreams.contains(streamId)) {
+          try {
+            await _hostApi.cancelStream(streamId);
+          } catch (_) {}
+          _flutterApiImpl.unregisterStream(streamId);
+          _activeStreams.remove(streamId);
+        }
+      },
+    );
+
+    // Start the stream asynchronously
+    _startStream(controller, prompt, schema, includeSchemaInPrompt, options);
+
+    return controller.stream;
+  }
+
+  Future<void> _startStream(
+    StreamController<GeneratedContent> controller,
+    String prompt,
+    GenerationSchema schema,
+    bool includeSchemaInPrompt,
+    GenerationOptions? options,
+  ) async {
+    try {
+      final sessionId = await _initCompleter.future;
+      final schemaJson = _convertToNullableKeys(schema.toJson());
+
+      final streamId = await _hostApi.streamResponseToWithSchema(
+        sessionId,
+        prompt,
+        schemaJson,
+        includeSchemaInPrompt,
+        _convertOptions(options),
+      );
+
+      _activeStreams.add(streamId);
+
+      // Register callbacks to receive stream events
+      _flutterApiImpl.registerStream(
+        streamId,
+        onSnapshot: (partialContent) {
+          if (!controller.isClosed) {
+            controller.add(partialContent);
+          }
+        },
+        onComplete: (finalContent) {
+          if (!controller.isClosed) {
+            controller.add(finalContent);
+            controller.close();
+          }
+          _activeStreams.remove(streamId);
+        },
+        onError: (errorCode, errorMessage) {
+          if (!controller.isClosed) {
+            controller.addError(Exception('$errorCode: $errorMessage'));
+            controller.close();
+          }
+          _activeStreams.remove(streamId);
+        },
+      );
+    } catch (e) {
+      if (!controller.isClosed) {
+        controller.addError(e);
+        controller.close();
+      }
     }
   }
 

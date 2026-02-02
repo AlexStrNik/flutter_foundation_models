@@ -225,6 +225,12 @@ protocol FoundationModelsHostApi {
   func destroySession(sessionId: String, completion: @escaping (Result<Void, Error>) -> Void)
   func respondTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
   func respondToWithSchema(sessionId: String, prompt: String, schema: [String?: Any?], includeSchemaInPrompt: Bool, options: GenerationOptionsMessage?, completion: @escaping (Result<[String?: Any?], Error>) -> Void)
+  /// Starts a streaming response. Returns a stream ID.
+  /// Snapshots will be sent via FlutterApi.onStreamSnapshot.
+  /// Completion/error will be sent via FlutterApi.onStreamComplete/onStreamError.
+  func streamResponseToWithSchema(sessionId: String, prompt: String, schema: [String?: Any?], includeSchemaInPrompt: Bool, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
+  /// Cancels an active stream.
+  func cancelStream(streamId: String, completion: @escaping (Result<Void, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -308,11 +314,59 @@ class FoundationModelsHostApiSetup {
     } else {
       respondToWithSchemaChannel.setMessageHandler(nil)
     }
+    /// Starts a streaming response. Returns a stream ID.
+    /// Snapshots will be sent via FlutterApi.onStreamSnapshot.
+    /// Completion/error will be sent via FlutterApi.onStreamComplete/onStreamError.
+    let streamResponseToWithSchemaChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.streamResponseToWithSchema\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      streamResponseToWithSchemaChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let sessionIdArg = args[0] as! String
+        let promptArg = args[1] as! String
+        let schemaArg = args[2] as! [String?: Any?]
+        let includeSchemaInPromptArg = args[3] as! Bool
+        let optionsArg: GenerationOptionsMessage? = nilOrValue(args[4])
+        api.streamResponseToWithSchema(sessionId: sessionIdArg, prompt: promptArg, schema: schemaArg, includeSchemaInPrompt: includeSchemaInPromptArg, options: optionsArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      streamResponseToWithSchemaChannel.setMessageHandler(nil)
+    }
+    /// Cancels an active stream.
+    let cancelStreamChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.cancelStream\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      cancelStreamChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let streamIdArg = args[0] as! String
+        api.cancelStream(streamId: streamIdArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      cancelStreamChannel.setMessageHandler(nil)
+    }
   }
 }
 /// Generated protocol from Pigeon that represents Flutter messages that can be called from Swift.
 protocol FoundationModelsFlutterApiProtocol {
   func invokeTool(sessionId sessionIdArg: String, toolName toolNameArg: String, arguments argumentsArg: [String?: Any?], completion: @escaping (Result<[String?: Any?], PigeonError>) -> Void)
+  /// Called when a new snapshot is available during streaming.
+  func onStreamSnapshot(streamId streamIdArg: String, partialContent partialContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void)
+  /// Called when streaming completes successfully.
+  func onStreamComplete(streamId streamIdArg: String, finalContent finalContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void)
+  /// Called when streaming fails.
+  func onStreamError(streamId streamIdArg: String, errorCode errorCodeArg: String, errorMessage errorMessageArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
 }
 class FoundationModelsFlutterApi: FoundationModelsFlutterApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -342,6 +396,63 @@ class FoundationModelsFlutterApi: FoundationModelsFlutterApiProtocol {
       } else {
         let result = listResponse[0] as! [String?: Any?]
         completion(.success(result))
+      }
+    }
+  }
+  /// Called when a new snapshot is available during streaming.
+  func onStreamSnapshot(streamId streamIdArg: String, partialContent partialContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamSnapshot\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([streamIdArg, partialContentArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(Void()))
+      }
+    }
+  }
+  /// Called when streaming completes successfully.
+  func onStreamComplete(streamId streamIdArg: String, finalContent finalContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([streamIdArg, finalContentArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(Void()))
+      }
+    }
+  }
+  /// Called when streaming fails.
+  func onStreamError(streamId streamIdArg: String, errorCode errorCodeArg: String, errorMessage errorMessageArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamError\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([streamIdArg, errorCodeArg, errorMessageArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(Void()))
       }
     }
   }

@@ -71,20 +71,6 @@ final class ArrayGenerationSchema extends DynamicGenerationSchema {
       };
 }
 
-final class DictionaryGenerationSchema extends DynamicGenerationSchema {
-  final DynamicGenerationSchema dictionaryOf;
-
-  DictionaryGenerationSchema({
-    required this.dictionaryOf,
-  });
-
-  @override
-  Map<String, dynamic> toJson() => {
-        "kind": "DictionaryGenerationSchema",
-        "dictionaryOf": dictionaryOf.toJson(),
-      };
-}
-
 final class AnyOfGenerationSchema extends DynamicGenerationSchema {
   final String name;
   String? description;

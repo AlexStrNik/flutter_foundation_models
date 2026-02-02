@@ -72,6 +72,22 @@ abstract class FoundationModelsHostApi {
     bool includeSchemaInPrompt,
     GenerationOptionsMessage? options,
   );
+
+  /// Starts a streaming response. Returns a stream ID.
+  /// Snapshots will be sent via FlutterApi.onStreamSnapshot.
+  /// Completion/error will be sent via FlutterApi.onStreamComplete/onStreamError.
+  @async
+  String streamResponseToWithSchema(
+    String sessionId,
+    String prompt,
+    Map<String?, Object?> schema,
+    bool includeSchemaInPrompt,
+    GenerationOptionsMessage? options,
+  );
+
+  /// Cancels an active stream.
+  @async
+  void cancelStream(String streamId);
 }
 
 @FlutterApi()
@@ -81,5 +97,24 @@ abstract class FoundationModelsFlutterApi {
     String sessionId,
     String toolName,
     Map<String?, Object?> arguments,
+  );
+
+  /// Called when a new snapshot is available during streaming.
+  void onStreamSnapshot(
+    String streamId,
+    Map<String?, Object?> partialContent,
+  );
+
+  /// Called when streaming completes successfully.
+  void onStreamComplete(
+    String streamId,
+    Map<String?, Object?> finalContent,
+  );
+
+  /// Called when streaming fails.
+  void onStreamError(
+    String streamId,
+    String errorCode,
+    String errorMessage,
   );
 }

@@ -5,6 +5,7 @@ import FoundationModels
 class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     private var sessions = [String: LanguageModelSession]()
     private var flutterApi: FoundationModelsFlutterApi?
+    private var activeStreams = [String: Task<Void, Never>]()
 
     init(binaryMessenger: FlutterBinaryMessenger) {
         self.flutterApi = FoundationModelsFlutterApi(binaryMessenger: binaryMessenger)
@@ -106,7 +107,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         }
 
         do {
-            let schemaDict = schema.compactMapKeys { $0 }
+            let schemaDict = schema.compactMapKeys()
             let generationSchema = try GenerationSchema.fromJson(schemaDict)
             let generationOptions = convertOptions(options)
 
@@ -146,6 +147,109 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                 details: nil
             )))
         }
+    }
+
+    func streamResponseToWithSchema(
+        sessionId: String,
+        prompt: String,
+        schema: [String?: Any?],
+        includeSchemaInPrompt: Bool,
+        options: GenerationOptionsMessage?,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        guard let session = sessions[sessionId] else {
+            completion(.failure(PigeonError(
+                code: "SESSION_NOT_FOUND",
+                message: "Session with id \(sessionId) not found",
+                details: nil
+            )))
+            return
+        }
+
+        do {
+            let schemaDict = schema.compactMapKeys()
+            let generationSchema = try GenerationSchema.fromJson(schemaDict)
+            let generationOptions = convertOptions(options)
+
+            let streamId = UUID().uuidString
+
+            let task = Task {
+                do {
+                    let stream = session.streamResponse(
+                        to: prompt,
+                        schema: generationSchema,
+                        includeSchemaInPrompt: includeSchemaInPrompt,
+                        options: generationOptions
+                    )
+
+                    var finalContent: [String?: Any?]? = nil
+
+                    for try await snapshot in stream {
+                        // Check if task was cancelled
+                        if Task.isCancelled { break }
+
+                        // Convert rawContent to dictionary
+                        let jsonData = snapshot.rawContent.jsonString.data(using: .utf8)!
+                        if let jsonDict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any?] {
+                            let mappedContent = jsonDict.mapToOptionalKeys()
+                            finalContent = mappedContent
+
+                            // Send snapshot to Flutter
+                            await MainActor.run {
+                                self.flutterApi?.onStreamSnapshot(
+                                    streamId: streamId,
+                                    partialContent: mappedContent
+                                ) { _ in }
+                            }
+                        }
+                    }
+
+                    // Stream completed
+                    if !Task.isCancelled, let content = finalContent {
+                        await MainActor.run {
+                            self.flutterApi?.onStreamComplete(
+                                streamId: streamId,
+                                finalContent: content
+                            ) { _ in }
+                        }
+                    }
+                } catch {
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            self.flutterApi?.onStreamError(
+                                streamId: streamId,
+                                errorCode: "STREAM_ERROR",
+                                errorMessage: error.localizedDescription
+                            ) { _ in }
+                        }
+                    }
+                }
+
+                // Clean up
+                self.activeStreams.removeValue(forKey: streamId)
+            }
+
+            activeStreams[streamId] = task
+            completion(.success(streamId))
+
+        } catch {
+            completion(.failure(PigeonError(
+                code: "SCHEMA_ERROR",
+                message: "Failed to parse generation schema: \(error.localizedDescription)",
+                details: nil
+            )))
+        }
+    }
+
+    func cancelStream(
+        streamId: String,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        if let task = activeStreams[streamId] {
+            task.cancel()
+            activeStreams.removeValue(forKey: streamId)
+        }
+        completion(.success(()))
     }
 
     private func convertOptions(_ options: GenerationOptionsMessage?) -> GenerationOptions {

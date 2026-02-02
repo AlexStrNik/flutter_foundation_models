@@ -41,8 +41,6 @@ extension DynamicGenerationSchema {
             return try fromValueGenerationSchema(json)
         case "ArrayGenerationSchema":
             return try fromArrayGenerationSchema(json)
-        case "DictionaryGenerationSchema":
-            return try fromDictionaryGenerationSchema(json)
         case "AnyOfGenerationSchema":
             return try fromAnyOfGenerationSchema(json)
         case "AnyOfStringsGenerationSchema":
@@ -140,17 +138,6 @@ extension DynamicGenerationSchema {
             minimumElements: minimumElements,
             maximumElements: maximumElements
         )
-    }
-
-    fileprivate static func fromDictionaryGenerationSchema(
-        _ json: JSON
-    ) throws -> DynamicGenerationSchema {
-        guard let dictionaryOfJson = json["dictionaryOf"] as? JSON else {
-            throw GenerationSchemaError.missingField("dictionaryOf for DictionaryGenerationSchema")
-        }
-        let dictionaryOf = try fromJson(dictionaryOfJson)
-
-        return DynamicGenerationSchema(dictionaryOf: dictionaryOf)
     }
 
     fileprivate static func fromAnyOfGenerationSchema(

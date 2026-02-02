@@ -10,12 +10,18 @@ class NovelIdea {
   @Guide(description: "A short subtitle for the novel")
   final String subtitle;
 
+  @Guide(
+    description: "A full description of your idea. Minimum 100 words",
+  )
+  final String description;
+
   @Guide(description: "The genre of the novel")
   final Genre genre;
 
   NovelIdea({
     required this.title,
     required this.subtitle,
+    required this.description,
     required this.genre,
   });
 }

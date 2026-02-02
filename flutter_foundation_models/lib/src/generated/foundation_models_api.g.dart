@@ -288,12 +288,74 @@ class FoundationModelsHostApi {
       return (pigeonVar_replyList[0] as Map<Object?, Object?>?)!.cast<String?, Object?>();
     }
   }
+
+  /// Starts a streaming response. Returns a stream ID.
+  /// Snapshots will be sent via FlutterApi.onStreamSnapshot.
+  /// Completion/error will be sent via FlutterApi.onStreamComplete/onStreamError.
+  Future<String> streamResponseToWithSchema(String sessionId, String prompt, Map<String?, Object?> schema, bool includeSchemaInPrompt, GenerationOptionsMessage? options) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.streamResponseToWithSchema$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[sessionId, prompt, schema, includeSchemaInPrompt, options]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as String?)!;
+    }
+  }
+
+  /// Cancels an active stream.
+  Future<void> cancelStream(String streamId) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.cancelStream$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[streamId]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else {
+      return;
+    }
+  }
 }
 
 abstract class FoundationModelsFlutterApi {
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
 
   Future<Map<String?, Object?>> invokeTool(String sessionId, String toolName, Map<String?, Object?> arguments);
+
+  /// Called when a new snapshot is available during streaming.
+  void onStreamSnapshot(String streamId, Map<String?, Object?> partialContent);
+
+  /// Called when streaming completes successfully.
+  void onStreamComplete(String streamId, Map<String?, Object?> finalContent);
+
+  /// Called when streaming fails.
+  void onStreamError(String streamId, String errorCode, String errorMessage);
 
   static void setUp(FoundationModelsFlutterApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
     messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
@@ -320,6 +382,93 @@ abstract class FoundationModelsFlutterApi {
           try {
             final Map<String?, Object?> output = await api.invokeTool(arg_sessionId!, arg_toolName!, arg_arguments!);
             return wrapResponse(result: output);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamSnapshot$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          assert(message != null,
+          'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamSnapshot was null.');
+          final List<Object?> args = (message as List<Object?>?)!;
+          final String? arg_streamId = (args[0] as String?);
+          assert(arg_streamId != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamSnapshot was null, expected non-null String.');
+          final Map<String?, Object?>? arg_partialContent = (args[1] as Map<Object?, Object?>?)?.cast<String?, Object?>();
+          assert(arg_partialContent != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamSnapshot was null, expected non-null Map<String?, Object?>.');
+          try {
+            api.onStreamSnapshot(arg_streamId!, arg_partialContent!);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          assert(message != null,
+          'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete was null.');
+          final List<Object?> args = (message as List<Object?>?)!;
+          final String? arg_streamId = (args[0] as String?);
+          assert(arg_streamId != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete was null, expected non-null String.');
+          final Map<String?, Object?>? arg_finalContent = (args[1] as Map<Object?, Object?>?)?.cast<String?, Object?>();
+          assert(arg_finalContent != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete was null, expected non-null Map<String?, Object?>.');
+          try {
+            api.onStreamComplete(arg_streamId!, arg_finalContent!);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamError$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          assert(message != null,
+          'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamError was null.');
+          final List<Object?> args = (message as List<Object?>?)!;
+          final String? arg_streamId = (args[0] as String?);
+          assert(arg_streamId != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamError was null, expected non-null String.');
+          final String? arg_errorCode = (args[1] as String?);
+          assert(arg_errorCode != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamError was null, expected non-null String.');
+          final String? arg_errorMessage = (args[2] as String?);
+          assert(arg_errorMessage != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamError was null, expected non-null String.');
+          try {
+            api.onStreamError(arg_streamId!, arg_errorCode!, arg_errorMessage!);
+            return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
           }          catch (e) {

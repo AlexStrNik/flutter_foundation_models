@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 
 part 'weather_tool.g.dart';
@@ -36,7 +35,20 @@ class WeatherToolResult {
   });
 }
 
+/// Callback for when the tool is called
+typedef WeatherToolCallback = void Function(String city);
+
 class WeatherTool extends Tool {
+  final double temperature;
+  final String condition;
+  final WeatherToolCallback? onCalled;
+
+  WeatherTool({
+    required this.temperature,
+    required this.condition,
+    this.onCalled,
+  });
+
   @override
   String name = "getWeather";
   @override
@@ -48,12 +60,12 @@ class WeatherTool extends Tool {
       arguments,
     );
 
-    final conditions = ["sunny", "cloudy", "rainy", "snowy"];
+    onCalled?.call(parsedArguments.city);
 
     return WeatherToolResult(
       city: parsedArguments.city,
-      temperature: Random().nextDouble() * 100,
-      condition: conditions[Random().nextInt(conditions.length)],
+      temperature: temperature,
+      condition: condition,
     ).toGeneratedContent();
   }
 

@@ -62,6 +62,11 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     final className = element.name;
     final description = annotation.peek('description')?.stringValue;
     final buffer = StringBuffer();
+
+    // Generate Partial class first
+    buffer.writeln(_generatePartialClass(className, visitor));
+    buffer.writeln();
+
     buffer.writeln('extension \$${className}Generable on $className {');
     buffer.writeln('  static GenerationSchema get generationSchema {');
 
@@ -139,6 +144,20 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     buffer.writeln('  }');
     buffer.writeln();
 
+    // Generate static fromPartialGeneratedContent method for streaming
+    buffer.writeln('  static \$${className}Partial fromPartialGeneratedContent(GeneratedContent content) {');
+    buffer.writeln('    return \$${className}Partial(');
+
+    for (final field in visitor.fields) {
+      final fieldName = field.name;
+      buffer.writeln(
+          '      $fieldName: content.value["$fieldName"] != null ? ${_getFromGeneratedContentForFieldPartial('content.value["$fieldName"]', field.type)} : null,');
+    }
+
+    buffer.writeln('    );');
+    buffer.writeln('  }');
+    buffer.writeln();
+
     // Generate toGeneratedContent instance method
     buffer.writeln('  GeneratedContent toGeneratedContent() {');
     buffer.writeln('    return GeneratedContent({');
@@ -160,6 +179,54 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     buffer.writeln('}');
 
     return buffer.toString();
+  }
+
+  String _generatePartialClass(String className, ModelVisitor visitor) {
+    final buffer = StringBuffer();
+
+    buffer.writeln('/// Partial version of [$className] for streaming responses.');
+    buffer.writeln('/// All fields are optional as they may not be fully generated yet.');
+    buffer.writeln('class \$${className}Partial {');
+
+    // Generate fields (all optional)
+    for (final field in visitor.fields) {
+      final fieldName = field.name;
+      final fieldType = _getPartialType(field.type);
+      buffer.writeln('  final $fieldType $fieldName;');
+    }
+    buffer.writeln();
+
+    // Generate constructor
+    buffer.writeln('  \$${className}Partial({');
+    for (final field in visitor.fields) {
+      buffer.writeln('    this.${field.name},');
+    }
+    buffer.writeln('  });');
+
+    buffer.writeln('}');
+
+    return buffer.toString();
+  }
+
+  String _getPartialType(DartType type) {
+    final typeStr = type.getDisplayString(withNullability: false);
+
+    if (type.isDartCoreString ||
+        type.isDartCoreInt ||
+        type.isDartCoreDouble ||
+        type.isDartCoreBool) {
+      return '$typeStr?';
+    } else if (type.isDartCoreList) {
+      final elementType = (type as InterfaceType).typeArguments.single;
+      final partialElementType = _getPartialType(elementType);
+      return 'List<$partialElementType>?';
+    } else if (type is InterfaceType && type.element is EnumElement) {
+      // Enums are atomic - just nullable, no Partial version
+      return '$typeStr?';
+    } else {
+      // For custom classes, use Partial version
+      return '\$${typeStr}Partial?';
+    }
   }
 
   String _generateForEnum(
@@ -199,6 +266,16 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     buffer.writeln('    return $enumName.values.firstWhere(');
     buffer.writeln('      (e) => e.name == content.value,');
     buffer.writeln('      orElse: () => throw ArgumentError("Unknown enum value: \${content.value}"),');
+    buffer.writeln('    );');
+    buffer.writeln('  }');
+    buffer.writeln();
+
+    // Generate static fromPartialGeneratedContent method (returns nullable for streaming)
+    buffer.writeln('  static $enumName? fromPartialGeneratedContent(GeneratedContent content) {');
+    buffer.writeln('    if (content.value == null) return null;');
+    buffer.writeln('    return $enumName.values.cast<$enumName?>().firstWhere(');
+    buffer.writeln('      (e) => e?.name == content.value,');
+    buffer.writeln('      orElse: () => null,');
     buffer.writeln('    );');
     buffer.writeln('  }');
     buffer.writeln();
@@ -399,13 +476,7 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
       final elementType = (type as InterfaceType).typeArguments.single;
       return _buildArraySchema(elementType, guides);
     } else if (type.isDartCoreMap) {
-      final typeArguments = (type as InterfaceType).typeArguments;
-
-      if (!typeArguments[0].isDartCoreString) {
-        throw Exception("Only Map<String, T> are supported");
-      }
-
-      return 'DictionaryGenerationSchema(dictionaryOf: ${_getSchemaForType(typeArguments[1])})';
+      throw Exception("Map types are not supported in generation schemas");
     } else {
       final typeName = type.getDisplayString(withNullability: false);
       return '\$${typeName}Generable.generationSchema.root';
@@ -462,10 +533,6 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
       final elementType = (fieldType as InterfaceType).typeArguments.single;
 
       return '$fieldName.map((e) => ${_getToGeneratedContentForField("e", elementType)}).toList()';
-    } else if (fieldType.isDartCoreMap) {
-      final typeArgs = (fieldType as InterfaceType).typeArguments;
-      final valueType = typeArgs[1];
-      return '$fieldName.map((k, v) => MapEntry(k, ${_getToGeneratedContentForField("v", valueType)}))';
     } else {
       return '$fieldName.toGeneratedContent().value';
     }
@@ -484,13 +551,33 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
       final elementType = (fieldType as InterfaceType).typeArguments.single;
 
       return '($jsonField as List).map((e) => ${_getFromGeneratedContentForField("e", elementType)}).toList()';
-    } else if (fieldType.isDartCoreMap) {
-      final typeArgs = (fieldType as InterfaceType).typeArguments;
-      final valueType = typeArgs[1];
-      return '($jsonField as Map).map((k, v) => MapEntry(k as String, ${_getFromGeneratedContentForField("v", valueType)}))';
     } else {
       final typeName = fieldType.getDisplayString(withNullability: false);
       return '\$${typeName}Generable.fromGeneratedContent(GeneratedContent($jsonField))';
+    }
+  }
+
+  String _getFromGeneratedContentForFieldPartial(String jsonField, DartType fieldType) {
+    if (fieldType.isDartCoreString) {
+      return '$jsonField as String?';
+    } else if (fieldType.isDartCoreInt) {
+      return '$jsonField as int?';
+    } else if (fieldType.isDartCoreDouble) {
+      return '$jsonField as double?';
+    } else if (fieldType.isDartCoreBool) {
+      return '$jsonField as bool?';
+    } else if (fieldType.isDartCoreList) {
+      final elementType = (fieldType as InterfaceType).typeArguments.single;
+
+      return '($jsonField as List?)?.map((e) => ${_getFromGeneratedContentForFieldPartial("e", elementType)}).toList()';
+    } else if (fieldType is InterfaceType && fieldType.element is EnumElement) {
+      // Enums use fromPartialGeneratedContent which returns nullable
+      final typeName = fieldType.getDisplayString(withNullability: false);
+      return '\$${typeName}Generable.fromPartialGeneratedContent(GeneratedContent($jsonField))';
+    } else {
+      // Classes use fromPartialGeneratedContent which returns Partial version
+      final typeName = fieldType.getDisplayString(withNullability: false);
+      return '\$${typeName}Generable.fromPartialGeneratedContent(GeneratedContent($jsonField))';
     }
   }
 }

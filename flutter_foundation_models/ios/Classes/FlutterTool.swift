@@ -22,11 +22,12 @@ struct FlutterTool: Tool {
         self.parameters = try GenerationSchema.fromJson(params)
     }
 
+    typealias Output = GeneratedContent
     typealias Arguments = GeneratedContent
 
-    func call(arguments: GeneratedContent) async throws -> ToolOutput {
+    func call(arguments: GeneratedContent) async throws -> Output {
         let argumentsJson = try JSONSerialization.jsonObject(
-            with: arguments.jsonString.data(using: .utf8)
+            with: arguments.jsonString.data(using: .utf8)!
         )
 
         let content = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
@@ -46,8 +47,11 @@ struct FlutterTool: Tool {
                 }
             }
         }
+        
+        let json = try! JSONSerialization.data(withJSONObject: content, options: [])
+        let jsonString = String(data: json, encoding: .utf8)!
 
-        return ToolOutput(GeneratedContent(content))
+        return try Output(json: jsonString)
     }
 }
 

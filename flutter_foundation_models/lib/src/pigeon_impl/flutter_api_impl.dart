@@ -1,10 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 import 'package:flutter_foundation_models/src/generated/foundation_models_api.g.dart';
+
+/// Callback types for streaming
+typedef StreamSnapshotCallback = void Function(GeneratedContent partialContent);
+typedef StreamCompleteCallback = void Function(GeneratedContent finalContent);
+typedef StreamErrorCallback = void Function(String errorCode, String errorMessage);
+
+/// Holds callbacks for an active stream
+class _StreamCallbacks {
+  final StreamSnapshotCallback onSnapshot;
+  final StreamCompleteCallback onComplete;
+  final StreamErrorCallback onError;
+
+  _StreamCallbacks({
+    required this.onSnapshot,
+    required this.onComplete,
+    required this.onError,
+  });
+}
 
 class FlutterApiImpl implements FoundationModelsFlutterApi {
   FlutterApiImpl();
 
   final Map<String, Map<String, Tool>> _sessionTools = {};
+  final Map<String, _StreamCallbacks> _streamCallbacks = {};
 
   void registerSession(String sessionId, List<Tool> tools) {
     final toolMap = <String, Tool>{};
@@ -16,6 +37,25 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
 
   void unregisterSession(String sessionId) {
     _sessionTools.remove(sessionId);
+  }
+
+  /// Registers callbacks for a stream
+  void registerStream(
+    String streamId, {
+    required StreamSnapshotCallback onSnapshot,
+    required StreamCompleteCallback onComplete,
+    required StreamErrorCallback onError,
+  }) {
+    _streamCallbacks[streamId] = _StreamCallbacks(
+      onSnapshot: onSnapshot,
+      onComplete: onComplete,
+      onError: onError,
+    );
+  }
+
+  /// Unregisters callbacks for a stream
+  void unregisterStream(String streamId) {
+    _streamCallbacks.remove(streamId);
   }
 
   @override
@@ -38,6 +78,34 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
     final result = await tool.call(GeneratedContent(cleanedArgs));
 
     return _convertToNullableKeys(result.value);
+  }
+
+  @override
+  void onStreamSnapshot(String streamId, Map<String?, Object?> partialContent) {
+    final callbacks = _streamCallbacks[streamId];
+    if (callbacks != null) {
+      final cleanedContent = _cleanMapKeys(partialContent);
+      callbacks.onSnapshot(GeneratedContent(cleanedContent));
+    }
+  }
+
+  @override
+  void onStreamComplete(String streamId, Map<String?, Object?> finalContent) {
+    final callbacks = _streamCallbacks[streamId];
+    if (callbacks != null) {
+      final cleanedContent = _cleanMapKeys(finalContent);
+      callbacks.onComplete(GeneratedContent(cleanedContent));
+      _streamCallbacks.remove(streamId);
+    }
+  }
+
+  @override
+  void onStreamError(String streamId, String errorCode, String errorMessage) {
+    final callbacks = _streamCallbacks[streamId];
+    if (callbacks != null) {
+      callbacks.onError(errorCode, errorMessage);
+      _streamCallbacks.remove(streamId);
+    }
   }
 
   Map<String, dynamic> _cleanMapKeys(Map<String?, Object?> map) {
