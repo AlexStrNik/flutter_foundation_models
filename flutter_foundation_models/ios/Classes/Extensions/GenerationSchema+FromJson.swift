@@ -61,15 +61,63 @@ extension DynamicGenerationSchema {
             throw GenerationSchemaError.missingField("type for ValueGenerationSchema")
         }
 
+        // Extract constraints from JSON
+        let enumValues = json["enum"] as? [String]
+        let pattern = json["pattern"] as? String
+        let minimum = json["minimum"] as? NSNumber
+        let maximum = json["maximum"] as? NSNumber
+
         switch typeName {
         case "String":
-            return DynamicGenerationSchema(type: String.self)
+            var guides: [GenerationGuide<String>] = []
+
+            // Handle enum constraint (constant or anyOf)
+            if let values = enumValues {
+                if values.count == 1 {
+                    guides.append(.constant(values[0]))
+                } else if values.count > 1 {
+                    guides.append(.anyOf(values))
+                }
+            }
+
+            // Handle pattern constraint
+            if let regexPattern = pattern {
+                if let regex = try? Regex(regexPattern) {
+                    guides.append(.pattern(regex))
+                }
+            }
+
+            return DynamicGenerationSchema(type: String.self, guides: guides)
+
         case "Int":
-            return DynamicGenerationSchema(type: Int.self)
+            var guides: [GenerationGuide<Int>] = []
+
+            if let min = minimum, let max = maximum {
+                guides.append(.range(min.intValue...max.intValue))
+            } else if let min = minimum {
+                guides.append(.minimum(min.intValue))
+            } else if let max = maximum {
+                guides.append(.maximum(max.intValue))
+            }
+
+            return DynamicGenerationSchema(type: Int.self, guides: guides)
+
         case "Double":
-            return DynamicGenerationSchema(type: Double.self)
+            var guides: [GenerationGuide<Double>] = []
+
+            if let min = minimum, let max = maximum {
+                guides.append(.range(min.doubleValue...max.doubleValue))
+            } else if let min = minimum {
+                guides.append(.minimum(min.doubleValue))
+            } else if let max = maximum {
+                guides.append(.maximum(max.doubleValue))
+            }
+
+            return DynamicGenerationSchema(type: Double.self, guides: guides)
+
         case "Bool":
             return DynamicGenerationSchema(type: Bool.self)
+
         default:
             throw GenerationSchemaError.unknownType(typeName)
         }

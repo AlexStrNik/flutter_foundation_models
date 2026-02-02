@@ -49,7 +49,16 @@ extension $WeatherToolResultGenerable on WeatherToolResult {
         ),
         DynamicGenerationSchemaProperty(
           name: "temperature",
-          schema: ValueGenerationSchema(type: "Double"),
+          description: "Temperature in Fahrenheit",
+          schema:
+              ValueGenerationSchema(type: "Double", minimum: -40, maximum: 140),
+        ),
+        DynamicGenerationSchemaProperty(
+          name: "condition",
+          description: "Weather condition",
+          schema: ValueGenerationSchema(
+              type: "String",
+              enumValues: ["sunny", "cloudy", "rainy", "snowy"]),
         ),
       ],
     );
@@ -64,6 +73,7 @@ extension $WeatherToolResultGenerable on WeatherToolResult {
     return WeatherToolResult(
       city: content.value["city"] as String,
       temperature: content.value["temperature"] as double,
+      condition: content.value["condition"] as String,
     );
   }
 
@@ -71,6 +81,7 @@ extension $WeatherToolResultGenerable on WeatherToolResult {
     return GeneratedContent({
       "city": city,
       "temperature": temperature,
+      "condition": condition,
     });
   }
 }

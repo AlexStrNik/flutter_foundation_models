@@ -20,12 +20,35 @@ sealed class DynamicGenerationSchema {
 final class ValueGenerationSchema extends DynamicGenerationSchema {
   final String type;
 
+  /// For constant/anyOf string constraints
+  final List<String>? enumValues;
+
+  /// For regex pattern constraint
+  final String? pattern;
+
+  /// For numeric minimum constraint
+  final num? minimum;
+
+  /// For numeric maximum constraint
+  final num? maximum;
+
   ValueGenerationSchema({
     required this.type,
+    this.enumValues,
+    this.pattern,
+    this.minimum,
+    this.maximum,
   });
 
   @override
-  Map<String, dynamic> toJson() => {"kind": "ValueGenerationSchema", "type": type};
+  Map<String, dynamic> toJson() => {
+        "kind": "ValueGenerationSchema",
+        "type": type,
+        if (enumValues != null) "enum": enumValues,
+        if (pattern != null) "pattern": pattern,
+        if (minimum != null) "minimum": minimum,
+        if (maximum != null) "maximum": maximum,
+      };
 }
 
 final class ArrayGenerationSchema extends DynamicGenerationSchema {
@@ -43,8 +66,8 @@ final class ArrayGenerationSchema extends DynamicGenerationSchema {
   Map<String, dynamic> toJson() => {
         "kind": "ArrayGenerationSchema",
         "arrayOf": arrayOf.toJson(),
-        "minimumElements": minimumElements,
-        "maximumElements": maximumElements,
+        if (minimumElements != null) "minimumElements": minimumElements,
+        if (maximumElements != null) "maximumElements": maximumElements,
       };
 }
 
@@ -77,7 +100,7 @@ final class AnyOfGenerationSchema extends DynamicGenerationSchema {
   Map<String, dynamic> toJson() => {
         "kind": "AnyOfGenerationSchema",
         "name": name,
-        "description": description,
+        if (description != null) "description": description,
         "anyOf": anyOf.map((e) => e.toJson()).toList(),
       };
 }
@@ -97,7 +120,7 @@ final class AnyOfStringsGenerationSchema extends DynamicGenerationSchema {
   Map<String, dynamic> toJson() => {
         "kind": "AnyOfStringsGenerationSchema",
         "name": name,
-        "description": description,
+        if (description != null) "description": description,
         "anyOf": anyOf.toList(),
       };
 }
@@ -117,7 +140,7 @@ final class StructGenerationSchema extends DynamicGenerationSchema {
   Map<String, dynamic> toJson() => {
         "kind": "StructGenerationSchema",
         "name": name,
-        "description": description,
+        if (description != null) "description": description,
         "properties": properties.map((e) => e.toJson()).toList(),
       };
 }
@@ -137,7 +160,7 @@ final class DynamicGenerationSchemaProperty {
 
   Map<String, dynamic> toJson() => {
         "name": name,
-        "description": description,
+        if (description != null) "description": description,
         "schema": schema.toJson(),
         "isOptional": isOptional,
       };

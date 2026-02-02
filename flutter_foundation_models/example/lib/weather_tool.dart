@@ -16,11 +16,23 @@ class WeatherToolArguments {
 @Generable()
 class WeatherToolResult {
   final String city;
+
+  @Guide(
+    description: "Temperature in Fahrenheit",
+    guides: [GenerationGuide.range(-40, 140)],
+  )
   final double temperature;
+
+  @Guide(
+    description: "Weather condition",
+    guides: [GenerationGuide.anyOf(["sunny", "cloudy", "rainy", "snowy"])],
+  )
+  final String condition;
 
   WeatherToolResult({
     required this.city,
     required this.temperature,
+    required this.condition,
   });
 }
 
@@ -36,9 +48,12 @@ class WeatherTool extends Tool {
       arguments,
     );
 
+    final conditions = ["sunny", "cloudy", "rainy", "snowy"];
+
     return WeatherToolResult(
       city: parsedArguments.city,
       temperature: Random().nextDouble() * 100,
+      condition: conditions[Random().nextInt(conditions.length)],
     ).toGeneratedContent();
   }
 

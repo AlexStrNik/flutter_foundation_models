@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 
+import 'package:analyzer/dart/constant/value.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
@@ -7,6 +8,27 @@ import 'package:flutter_foundation_models_annotations/flutter_foundation_models_
 import 'package:source_gen/source_gen.dart';
 
 import 'model_visitor.dart';
+
+/// Represents parsed guide constraints from @Guide annotation
+class ParsedGuides {
+  final List<String>? enumValues;
+  final String? pattern;
+  final num? minimum;
+  final num? maximum;
+  final int? minItems;
+  final int? maxItems;
+  final ParsedGuides? elementGuides;
+
+  ParsedGuides({
+    this.enumValues,
+    this.pattern,
+    this.minimum,
+    this.maximum,
+    this.minItems,
+    this.maxItems,
+    this.elementGuides,
+  });
+}
 
 class GenerableGenerator extends GeneratorForAnnotation<Generable> {
   @override
@@ -55,12 +77,19 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
       final isOptional = field.type.toString().endsWith('?');
 
       String? fieldDescription;
+      ParsedGuides? guides;
+
       for (final metadata in field.metadata) {
         final metadataElement = metadata.element;
         if (metadataElement is ConstructorElement && metadataElement.enclosingElement.name == 'Guide') {
-          final descriptionObj = metadata.computeConstantValue()?.getField('description');
-          if (descriptionObj != null && !descriptionObj.isNull) {
-            fieldDescription = descriptionObj.toStringValue();
+          final constantValue = metadata.computeConstantValue();
+          if (constantValue != null) {
+            final descriptionObj = constantValue.getField('description');
+            if (descriptionObj != null && !descriptionObj.isNull) {
+              fieldDescription = descriptionObj.toStringValue();
+            }
+
+            guides = _parseGuides(constantValue);
           }
         }
       }
@@ -70,7 +99,7 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
       if (fieldDescription != null) {
         buffer.writeln('          description: "$fieldDescription",');
       }
-      buffer.writeln('          schema: ${_getSchemaForType(field.type)},');
+      buffer.writeln('          schema: ${_getSchemaForType(field.type, guides)},');
       if (isOptional) {
         buffer.writeln('          isOptional: true,');
       }
@@ -183,18 +212,192 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     return buffer.toString();
   }
 
-  String _getSchemaForType(DartType type) {
+  ParsedGuides? _parseGuides(DartObject guideAnnotation) {
+    final guidesField = guideAnnotation.getField('guides');
+    if (guidesField == null || guidesField.isNull) {
+      return null;
+    }
+
+    final guidesList = guidesField.toListValue();
+    if (guidesList == null || guidesList.isEmpty) {
+      return null;
+    }
+
+    List<String>? enumValues;
+    String? pattern;
+    num? minimum;
+    num? maximum;
+    int? minItems;
+    int? maxItems;
+    ParsedGuides? elementGuides;
+
+    for (final guide in guidesList) {
+      final guideType = guide.type;
+      if (guideType == null) continue;
+
+      final typeName = guideType.getDisplayString(withNullability: false);
+
+      switch (typeName) {
+        case 'ConstantGuide':
+          final value = guide.getField('value')?.toStringValue();
+          if (value != null) {
+            enumValues = [value];
+          }
+          break;
+
+        case 'AnyOfGuide':
+          final values = guide.getField('values')?.toListValue();
+          if (values != null) {
+            enumValues = values.map((v) => v.toStringValue()!).toList();
+          }
+          break;
+
+        case 'PatternGuide':
+          pattern = guide.getField('regex')?.toStringValue();
+          break;
+
+        case 'MinimumGuide':
+          final value = guide.getField('value');
+          if (value != null) {
+            minimum = value.toIntValue() ?? value.toDoubleValue();
+          }
+          break;
+
+        case 'MaximumGuide':
+          final value = guide.getField('value');
+          if (value != null) {
+            maximum = value.toIntValue() ?? value.toDoubleValue();
+          }
+          break;
+
+        case 'RangeGuide':
+          final minVal = guide.getField('min');
+          final maxVal = guide.getField('max');
+          if (minVal != null) {
+            minimum = minVal.toIntValue() ?? minVal.toDoubleValue();
+          }
+          if (maxVal != null) {
+            maximum = maxVal.toIntValue() ?? maxVal.toDoubleValue();
+          }
+          break;
+
+        case 'MinimumCountGuide':
+          minItems = guide.getField('count')?.toIntValue();
+          break;
+
+        case 'MaximumCountGuide':
+          maxItems = guide.getField('count')?.toIntValue();
+          break;
+
+        case 'ExactCountGuide':
+          final count = guide.getField('count')?.toIntValue();
+          if (count != null) {
+            minItems = count;
+            maxItems = count;
+          }
+          break;
+
+        case 'CountRangeGuide':
+          minItems = guide.getField('min')?.toIntValue();
+          maxItems = guide.getField('max')?.toIntValue();
+          break;
+
+        case 'ElementGuide':
+          final nestedGuide = guide.getField('guide');
+          if (nestedGuide != null) {
+            elementGuides = _parseSingleGuide(nestedGuide);
+          }
+          break;
+      }
+    }
+
+    if (enumValues == null &&
+        pattern == null &&
+        minimum == null &&
+        maximum == null &&
+        minItems == null &&
+        maxItems == null &&
+        elementGuides == null) {
+      return null;
+    }
+
+    return ParsedGuides(
+      enumValues: enumValues,
+      pattern: pattern,
+      minimum: minimum,
+      maximum: maximum,
+      minItems: minItems,
+      maxItems: maxItems,
+      elementGuides: elementGuides,
+    );
+  }
+
+  ParsedGuides? _parseSingleGuide(DartObject guide) {
+    final guideType = guide.type;
+    if (guideType == null) return null;
+
+    final typeName = guideType.getDisplayString(withNullability: false);
+
+    switch (typeName) {
+      case 'ConstantGuide':
+        final value = guide.getField('value')?.toStringValue();
+        if (value != null) {
+          return ParsedGuides(enumValues: [value]);
+        }
+        break;
+
+      case 'AnyOfGuide':
+        final values = guide.getField('values')?.toListValue();
+        if (values != null) {
+          return ParsedGuides(enumValues: values.map((v) => v.toStringValue()!).toList());
+        }
+        break;
+
+      case 'PatternGuide':
+        final pattern = guide.getField('regex')?.toStringValue();
+        if (pattern != null) {
+          return ParsedGuides(pattern: pattern);
+        }
+        break;
+
+      case 'MinimumGuide':
+        final value = guide.getField('value');
+        if (value != null) {
+          return ParsedGuides(minimum: value.toIntValue() ?? value.toDoubleValue());
+        }
+        break;
+
+      case 'MaximumGuide':
+        final value = guide.getField('value');
+        if (value != null) {
+          return ParsedGuides(maximum: value.toIntValue() ?? value.toDoubleValue());
+        }
+        break;
+
+      case 'RangeGuide':
+        final minVal = guide.getField('min');
+        final maxVal = guide.getField('max');
+        return ParsedGuides(
+          minimum: minVal?.toIntValue() ?? minVal?.toDoubleValue(),
+          maximum: maxVal?.toIntValue() ?? maxVal?.toDoubleValue(),
+        );
+    }
+
+    return null;
+  }
+
+  String _getSchemaForType(DartType type, [ParsedGuides? guides]) {
     if (type.isDartCoreString) {
-      return 'ValueGenerationSchema(type: "String")';
+      return _buildValueSchema('String', guides);
     } else if (type.isDartCoreInt) {
-      return 'ValueGenerationSchema(type: "Int")';
+      return _buildValueSchema('Int', guides);
     } else if (type.isDartCoreDouble) {
-      return 'ValueGenerationSchema(type: "Double")';
+      return _buildValueSchema('Double', guides);
     } else if (type.isDartCoreBool) {
       return 'ValueGenerationSchema(type: "Bool")';
     } else if (type.isDartCoreList) {
       final elementType = (type as InterfaceType).typeArguments.single;
-      return 'ArrayGenerationSchema(arrayOf: ${_getSchemaForType(elementType)})';
+      return _buildArraySchema(elementType, guides);
     } else if (type.isDartCoreMap) {
       final typeArguments = (type as InterfaceType).typeArguments;
 
@@ -207,6 +410,46 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
       final typeName = type.getDisplayString(withNullability: false);
       return '\$${typeName}Generable.generationSchema.root';
     }
+  }
+
+  String _buildValueSchema(String type, ParsedGuides? guides) {
+    final params = <String>['type: "$type"'];
+
+    if (guides != null) {
+      if (guides.enumValues != null) {
+        final enumStr = guides.enumValues!.map((v) => '"$v"').join(', ');
+        params.add('enumValues: [$enumStr]');
+      }
+      if (guides.pattern != null) {
+        // Escape backslashes for the generated code
+        final escapedPattern = guides.pattern!.replaceAll(r'\', r'\\');
+        params.add('pattern: "$escapedPattern"');
+      }
+      if (guides.minimum != null) {
+        params.add('minimum: ${guides.minimum}');
+      }
+      if (guides.maximum != null) {
+        params.add('maximum: ${guides.maximum}');
+      }
+    }
+
+    return 'ValueGenerationSchema(${params.join(', ')})';
+  }
+
+  String _buildArraySchema(DartType elementType, ParsedGuides? guides) {
+    final elementSchema = _getSchemaForType(elementType, guides?.elementGuides);
+    final params = <String>['arrayOf: $elementSchema'];
+
+    if (guides != null) {
+      if (guides.minItems != null) {
+        params.add('minimumElements: ${guides.minItems}');
+      }
+      if (guides.maxItems != null) {
+        params.add('maximumElements: ${guides.maxItems}');
+      }
+    }
+
+    return 'ArrayGenerationSchema(${params.join(', ')})';
   }
 
   String _getToGeneratedContentForField(String fieldName, DartType fieldType) {
