@@ -1,24 +1,54 @@
-# flutter_foundation_models
+# Flutter Foundation Models
 
-Flutter port of the FoundationModels framework with Tool and Generable support. Check the [example](flutter_foundation_models/example) for example usage.
+A Flutter plugin for Apple's on-device Foundation Models framework. Provides text generation, structured output, streaming, and tool use capabilities.
 
-Obviously way too raw to use anywhere near production. The codegen package is a semi-vibe-coded nightmare. The API is missing a good half of the features from the original framework. The Swift part may crash due to bad energy or a solar flare, has almost zero type safety, and is about as easy to read as your medicine prescriptions.
+## Packages
 
-But hey, it works — and if someone _really_ needs it, it wouldn't take much to make it more production-ready.
+| Package | Description |
+|---------|-------------|
+| [flutter_foundation_models](flutter_foundation_models/) | Main Flutter plugin |
+| [flutter_foundation_models_annotations](flutter_foundation_models_annotations/) | Annotations (@Generable, @Guide) |
+| [flutter_foundation_models_gen](flutter_foundation_models_gen/) | Code generator for @Generable |
 
-## TODO:
+## Quick Start
 
-- Use `json_serializable`. Gotta admit, reinventing the wheel there was not my brightest idea.
+```dart
+import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 
-- Maybe use Pigeon, that still wouldn't fix all method channel issues, but since it finally support sealed classes...
+// Simple text generation
+final session = LanguageModelSession();
+final response = await session.respondTo("What is Flutter?");
 
-- Fix session deinit, because you know, `deinit` isn't a thing in Flutter.
+// Structured output
+@Generable()
+class Movie {
+  @Guide(description: "Movie title")
+  final String title;
+  final int year;
+  Movie({required this.title, required this.year});
+}
 
-- Support more APIs and lower iOS versions so it can be used in production.
+final content = await session.respondToWithSchema(
+  "Recommend a movie",
+  schema: $MovieGenerable.generationSchema,
+);
+final movie = $MovieGenerable.fromGeneratedContent(content);
+```
 
-## Contributing
+See the [main package README](flutter_foundation_models/README.md) for full documentation.
 
-Feel free to open an issue or a pull request — I’ll try to respond as soon as possible.
+## Example
+
+Check out the [example app](flutter_foundation_models/example/) for a complete demo with:
+- Structured output generation
+- Streaming with partial updates
+- Tool use with user-configurable responses
+
+## Requirements
+
+- iOS 26.0+ / macOS 26.0+
+- Flutter 3.22+
+- Xcode 26+
 
 ## License
 

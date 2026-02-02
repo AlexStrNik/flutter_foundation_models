@@ -4,8 +4,48 @@ import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 import 'package:flutter_foundation_models/src/generated/foundation_models_api.g.dart';
 import 'package:flutter_foundation_models/src/pigeon_impl/flutter_api_impl.dart';
 
+/// A session for interacting with Apple's on-device Foundation Models.
+///
+/// [LanguageModelSession] provides methods to generate text responses and
+/// structured content using Apple's on-device language model. It supports
+/// both one-shot and streaming generation, as well as tool use.
+///
+/// Example usage:
+/// ```dart
+/// final session = LanguageModelSession();
+///
+/// // Simple text response
+/// final response = await session.respondTo("What is Flutter?");
+///
+/// // Structured output with schema
+/// final content = await session.respondToWithSchema(
+///   "Generate a user profile",
+///   schema: $UserProfileGenerable.generationSchema,
+/// );
+/// final profile = $UserProfileGenerable.fromGeneratedContent(content);
+///
+/// // Don't forget to dispose when done
+/// session.dispose();
+/// ```
+///
+/// For tool use, pass tools to the constructor:
+/// ```dart
+/// final session = LanguageModelSession(
+///   tools: [WeatherTool(), CalculatorTool()],
+/// );
+/// ```
 final class LanguageModelSession {
+  /// Tools available for the model to use during generation.
+  ///
+  /// Tools allow the model to call external functions to retrieve information
+  /// or perform actions. The model will automatically call tools when needed
+  /// based on the user's prompt.
   final List<Tool> tools;
+
+  /// System instructions that guide the model's behavior.
+  ///
+  /// Instructions provide context and guidelines for how the model should
+  /// respond. They are included at the beginning of the conversation.
   final String? instructions;
 
   static final FlutterApiImpl _flutterApiImpl = FlutterApiImpl();
@@ -13,6 +53,10 @@ final class LanguageModelSession {
 
   static final FoundationModelsHostApi _hostApi = FoundationModelsHostApi();
 
+  /// Creates a new language model session.
+  ///
+  /// [tools] - Optional list of tools the model can use.
+  /// [instructions] - Optional system instructions for the model.
   LanguageModelSession({
     this.tools = const [],
     this.instructions,
@@ -67,6 +111,10 @@ final class LanguageModelSession {
     return result;
   }
 
+  /// Disposes the session and releases resources.
+  ///
+  /// Always call this method when you're done using the session to free
+  /// native resources. After disposal, the session cannot be used again.
   Future<void> dispose() async {
     if (_isDisposed) return;
 
@@ -89,7 +137,18 @@ final class LanguageModelSession {
     }
   }
 
-  /// Respond to a prompt with a text response.
+  /// Generates a text response for the given prompt.
+  ///
+  /// This method sends the [prompt] to the language model and returns
+  /// the generated text response. If tools are configured, the model
+  /// may call them to gather information before responding.
+  ///
+  /// [prompt] - The user's input prompt.
+  /// [options] - Optional generation options for controlling output.
+  ///
+  /// Returns the generated text response.
+  ///
+  /// Throws an [Exception] if the session has been disposed.
   Future<String> respondTo(
     String prompt, {
     GenerationOptions? options,
@@ -111,7 +170,27 @@ final class LanguageModelSession {
     }
   }
 
-  /// Respond to a prompt with structured output according to the schema.
+  /// Generates structured content according to a schema.
+  ///
+  /// This method sends the [prompt] to the language model and returns
+  /// content that conforms to the provided [schema]. Use this for generating
+  /// typed data structures like objects, lists, and enums.
+  ///
+  /// [prompt] - The user's input prompt.
+  /// [schema] - The schema defining the structure of the output.
+  /// [includeSchemaInPrompt] - Whether to include schema description in the prompt.
+  /// [options] - Optional generation options for controlling output.
+  ///
+  /// Returns [GeneratedContent] that can be converted to typed objects.
+  ///
+  /// Example:
+  /// ```dart
+  /// final content = await session.respondToWithSchema(
+  ///   "Generate a novel idea",
+  ///   schema: $NovelIdeaGenerable.generationSchema,
+  /// );
+  /// final novelIdea = $NovelIdeaGenerable.fromGeneratedContent(content);
+  /// ```
   Future<GeneratedContent> respondToWithSchema(
     String prompt, {
     required GenerationSchema schema,
@@ -138,8 +217,31 @@ final class LanguageModelSession {
     }
   }
 
-  /// Stream a response with structured output according to the schema.
-  /// Returns a Stream of partial content as the model generates.
+  /// Streams structured content as it's generated.
+  ///
+  /// Similar to [respondToWithSchema], but returns a [Stream] that emits
+  /// partial content as the model generates it. This allows showing
+  /// progressive updates in the UI.
+  ///
+  /// [prompt] - The user's input prompt.
+  /// [schema] - The schema defining the structure of the output.
+  /// [includeSchemaInPrompt] - Whether to include schema description in the prompt.
+  /// [options] - Optional generation options for controlling output.
+  ///
+  /// Returns a [Stream] of [GeneratedContent] with partial results.
+  ///
+  /// Example:
+  /// ```dart
+  /// final stream = session.streamResponseToWithSchema(
+  ///   "Generate a novel idea",
+  ///   schema: $NovelIdeaGenerable.generationSchema,
+  /// );
+  ///
+  /// stream.listen((partialContent) {
+  ///   final partial = $NovelIdeaGenerable.fromPartialGeneratedContent(partialContent);
+  ///   print('Title so far: ${partial.title ?? "..."}');
+  /// });
+  /// ```
   Stream<GeneratedContent> streamResponseToWithSchema(
     String prompt, {
     required GenerationSchema schema,
