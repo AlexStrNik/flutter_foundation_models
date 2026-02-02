@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
@@ -85,31 +87,9 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     buffer.writeln('      dependencies: dependencies,');
     buffer.writeln('    );');
     buffer.writeln('  }');
-    buffer.writeln('}');
+    buffer.writeln();
 
-    // Generate JSON conversion extension
-    buffer.writeln('\nextension \$${className}ConvertibleToGeneratedContent on $className {');
-    buffer.writeln('  GeneratedContent toGeneratedContent() {');
-    buffer.writeln('    return GeneratedContent({');
-
-    for (final field in visitor.fields) {
-      final fieldName = field.name;
-      final isOptional = field.type.toString().endsWith('?');
-
-      if (isOptional) {
-        buffer.writeln(
-            '      if ($fieldName != null) "$fieldName": ${_getToGeneratedContentForField(fieldName, field.type)},');
-      } else {
-        buffer.writeln('      "$fieldName": ${_getToGeneratedContentForField(fieldName, field.type)},');
-      }
-    }
-
-    buffer.writeln('    });');
-    buffer.writeln('  }');
-    buffer.writeln('}');
-
-    // Generate factory constructor extension
-    buffer.writeln('\nextension \$${className}ConvertibleFromGeneratedContent on $className {');
+    // Generate static fromGeneratedContent method
     buffer.writeln('  static $className fromGeneratedContent(GeneratedContent content) {');
     buffer.writeln('    return $className(');
 
@@ -127,6 +107,26 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     }
 
     buffer.writeln('    );');
+    buffer.writeln('  }');
+    buffer.writeln();
+
+    // Generate toGeneratedContent instance method
+    buffer.writeln('  GeneratedContent toGeneratedContent() {');
+    buffer.writeln('    return GeneratedContent({');
+
+    for (final field in visitor.fields) {
+      final fieldName = field.name;
+      final isOptional = field.type.toString().endsWith('?');
+
+      if (isOptional) {
+        buffer.writeln(
+            '      if ($fieldName != null) "$fieldName": ${_getToGeneratedContentForField(fieldName, field.type)},');
+      } else {
+        buffer.writeln('      "$fieldName": ${_getToGeneratedContentForField(fieldName, field.type)},');
+      }
+    }
+
+    buffer.writeln('    });');
     buffer.writeln('  }');
     buffer.writeln('}');
 
@@ -163,23 +163,20 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     buffer.writeln('      dependencies: [],');
     buffer.writeln('    );');
     buffer.writeln('  }');
-    buffer.writeln('}');
+    buffer.writeln();
 
-    // Generate JSON conversion extension
-    buffer.writeln('\nextension \$${enumName}ConvertibleToGeneratedContent on $enumName {');
-    buffer.writeln('  GeneratedContent toGeneratedContent() {');
-    buffer.writeln('    return GeneratedContent(name);');
-    buffer.writeln('  }');
-    buffer.writeln('}');
-
-    // Generate factory constructor extension
-    buffer.writeln('\nextension \$${enumName}ConvertibleFromGeneratedContent on $enumName {');
-    buffer.writeln('  /// Create an instance from JSON data');
+    // Generate static fromGeneratedContent method
     buffer.writeln('  static $enumName fromGeneratedContent(GeneratedContent content) {');
     buffer.writeln('    return $enumName.values.firstWhere(');
     buffer.writeln('      (e) => e.name == content.value,');
     buffer.writeln('      orElse: () => throw ArgumentError("Unknown enum value: \${content.value}"),');
     buffer.writeln('    );');
+    buffer.writeln('  }');
+    buffer.writeln();
+
+    // Generate toGeneratedContent instance method
+    buffer.writeln('  GeneratedContent toGeneratedContent() {');
+    buffer.writeln('    return GeneratedContent(name);');
     buffer.writeln('  }');
     buffer.writeln('}');
 
@@ -207,7 +204,8 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
 
       return 'DictionaryGenerationSchema(dictionaryOf: ${_getSchemaForType(typeArguments[1])})';
     } else {
-      return '\$${type.getDisplayString()}Generable.generationSchema.root';
+      final typeName = type.getDisplayString(withNullability: false);
+      return '\$${typeName}Generable.generationSchema.root';
     }
   }
 
@@ -220,7 +218,11 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     } else if (fieldType.isDartCoreList) {
       final elementType = (fieldType as InterfaceType).typeArguments.single;
 
-      return '$fieldName.map((e) => ${_getToGeneratedContentForField("e", elementType)})';
+      return '$fieldName.map((e) => ${_getToGeneratedContentForField("e", elementType)}).toList()';
+    } else if (fieldType.isDartCoreMap) {
+      final typeArgs = (fieldType as InterfaceType).typeArguments;
+      final valueType = typeArgs[1];
+      return '$fieldName.map((k, v) => MapEntry(k, ${_getToGeneratedContentForField("v", valueType)}))';
     } else {
       return '$fieldName.toGeneratedContent().value';
     }
@@ -238,9 +240,14 @@ class GenerableGenerator extends GeneratorForAnnotation<Generable> {
     } else if (fieldType.isDartCoreList) {
       final elementType = (fieldType as InterfaceType).typeArguments.single;
 
-      return '$jsonField.map((e) => ${_getFromGeneratedContentForField("e", elementType)}).toList()';
+      return '($jsonField as List).map((e) => ${_getFromGeneratedContentForField("e", elementType)}).toList()';
+    } else if (fieldType.isDartCoreMap) {
+      final typeArgs = (fieldType as InterfaceType).typeArguments;
+      final valueType = typeArgs[1];
+      return '($jsonField as Map).map((k, v) => MapEntry(k as String, ${_getFromGeneratedContentForField("v", valueType)}))';
     } else {
-      return '\$${fieldType.getDisplayString()}ConvertibleFromGeneratedContent.fromGeneratedContent(GeneratedContent($jsonField))';
+      final typeName = fieldType.getDisplayString(withNullability: false);
+      return '\$${typeName}Generable.fromGeneratedContent(GeneratedContent($jsonField))';
     }
   }
 }

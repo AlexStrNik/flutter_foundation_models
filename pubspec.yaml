@@ -1,0 +1,9 @@
+name: flutter_foundation_models_workspace
+description: Workspace root for flutter_foundation_models monorepo
+publish_to: none
+
+environment:
+  sdk: ^3.5.3
+
+dev_dependencies:
+  melos: ^6.1.0

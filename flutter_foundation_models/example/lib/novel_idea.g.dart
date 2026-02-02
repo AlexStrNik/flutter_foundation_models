@@ -34,26 +34,22 @@ extension $NovelIdeaGenerable on NovelIdea {
       dependencies: dependencies,
     );
   }
-}
 
-extension $NovelIdeaConvertibleToGeneratedContent on NovelIdea {
+  static NovelIdea fromGeneratedContent(GeneratedContent content) {
+    return NovelIdea(
+      title: content.value["title"] as String,
+      subtitle: content.value["subtitle"] as String,
+      genre: $GenreGenerable
+          .fromGeneratedContent(GeneratedContent(content.value["genre"])),
+    );
+  }
+
   GeneratedContent toGeneratedContent() {
     return GeneratedContent({
       "title": title,
       "subtitle": subtitle,
       "genre": genre.toGeneratedContent().value,
     });
-  }
-}
-
-extension $NovelIdeaConvertibleFromGeneratedContent on NovelIdea {
-  static NovelIdea fromGeneratedContent(GeneratedContent content) {
-    return NovelIdea(
-      title: content.value["title"] as String,
-      subtitle: content.value["subtitle"] as String,
-      genre: $GenreConvertibleFromGeneratedContent
-          .fromGeneratedContent(GeneratedContent(content.value["genre"])),
-    );
   }
 }
 
@@ -71,20 +67,15 @@ extension $GenreGenerable on Genre {
       dependencies: [],
     );
   }
-}
 
-extension $GenreConvertibleToGeneratedContent on Genre {
-  GeneratedContent toGeneratedContent() {
-    return GeneratedContent(name);
-  }
-}
-
-extension $GenreConvertibleFromGeneratedContent on Genre {
-  /// Create an instance from JSON data
   static Genre fromGeneratedContent(GeneratedContent content) {
     return Genre.values.firstWhere(
       (e) => e.name == content.value,
       orElse: () => throw ArgumentError("Unknown enum value: ${content.value}"),
     );
+  }
+
+  GeneratedContent toGeneratedContent() {
+    return GeneratedContent(name);
   }
 }

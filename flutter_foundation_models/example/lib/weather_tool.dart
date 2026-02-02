@@ -32,7 +32,7 @@ class WeatherTool extends Tool {
 
   @override
   Future<GeneratedContent> call(GeneratedContent arguments) async {
-    final parsedArguments = $WeatherToolArgumentsConvertibleFromGeneratedContent.fromGeneratedContent(
+    final parsedArguments = $WeatherToolArgumentsGenerable.fromGeneratedContent(
       arguments,
     );
 

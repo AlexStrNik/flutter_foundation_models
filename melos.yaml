@@ -1,0 +1,45 @@
+name: flutter_foundation_models
+repository: https://github.com/user/flutter_foundation_models
+
+packages:
+  - flutter_foundation_models
+  - flutter_foundation_models_annotations
+  - flutter_foundation_models_gen
+  - flutter_foundation_models/example
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+scripts:
+  analyze:
+    run: dart analyze --fatal-infos
+    description: Run dart analyze in all packages
+    exec:
+      concurrency: 1
+
+  format:
+    run: dart format --set-exit-if-changed .
+    description: Check formatting in all packages
+
+  format:fix:
+    run: dart format .
+    description: Fix formatting in all packages
+
+  test:
+    run: flutter test
+    description: Run tests in all packages
+    packageFilters:
+      dirExists: test
+
+  build_runner:
+    run: dart run build_runner build --delete-conflicting-outputs
+    description: Run build_runner in packages that need it
+    packageFilters:
+      dependsOn: build_runner
+
+  clean:
+    run: flutter clean
+    description: Clean all packages
+    exec:
+      concurrency: 1

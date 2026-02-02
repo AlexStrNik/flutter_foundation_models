@@ -1,51 +1,74 @@
+import Foundation
 import FoundationModels
 
 struct FlutterTool: Tool {
     let sessionId: String
     let name: String
     let description: String
-    let schema: [String: any Sendable]
     let parameters: GenerationSchema
+    let flutterApi: FoundationModelsFlutterApi
 
     init(
         sessionId: String,
-        name: String,
-        description: String,
-        schema: [String: Any],
-        parameters: GenerationSchema
-    ) {
+        toolDefinition: ToolDefinitionMessage,
+        flutterApi: FoundationModelsFlutterApi
+    ) throws {
         self.sessionId = sessionId
-        self.name = name
-        self.description = description
-        self.schema = schema
-        self.parameters = parameters
+        self.name = toolDefinition.name
+        self.description = toolDefinition.description
+        self.flutterApi = flutterApi
+
+        let params = toolDefinition.parameters.compactMapKeys()
+        self.parameters = try GenerationSchema.fromJson(params)
     }
 
     typealias Arguments = GeneratedContent
 
     func call(arguments: GeneratedContent) async throws -> ToolOutput {
+        let argumentsJson = try JSONSerialization.jsonObject(
+            with: arguments.jsonString.data(using: .utf8)
+        )
+
         let content = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
-            do {
-                LanguageModelSessionApi.shared.toolCall(
-                    tool: self,
-                    arguments: try arguments.toJson(with: schema),
-                    completion: { result, error in
-                        if let error = error {
-                            continuation.resume(throwing: error)
-                        } else if let result {
-                            continuation.resume(returning: result)
-                        } else {
-                            continuation.resume(throwing: NSError(domain: "UnexpectedResult", code: -1, userInfo: nil))
-                        }
-                    }
-                )
-            } catch {
-                continuation.resume(throwing: error)
+            let args = (argumentsJson as? [String: Any?])?.mapToOptionalKeys() ?? [:]
+
+            flutterApi.invokeTool(
+                sessionId: sessionId,
+                toolName: name,
+                arguments: args
+            ) { result in
+                switch result {
+                case .success(let value):
+                    let cleanedValue = value.compactMapKeys()
+                    continuation.resume(returning: cleanedValue)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
             }
         }
-        
-        return ToolOutput(
-            GeneratedContent.fromJson(content)
-        )
+
+        return ToolOutput(GeneratedContent(content))
+    }
+}
+
+private extension Dictionary where Key == String?, Value == Any? {
+    func compactMapKeys() -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in self {
+            if let key = key, let value = value {
+                result[key] = value
+            }
+        }
+        return result
+    }
+}
+
+private extension Dictionary where Key == String, Value == Any? {
+    func mapToOptionalKeys() -> [String?: Any?] {
+        var result: [String?: Any?] = [:]
+        for (key, value) in self {
+            result[key] = value
+        }
+        return result
     }
 }

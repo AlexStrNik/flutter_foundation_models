@@ -22,7 +22,7 @@ class _NovelGeneratorState extends State<NovelGenerator> {
     );
 
     setState(() {
-      novelIdea = $NovelIdeaConvertibleFromGeneratedContent.fromGeneratedContent(generatedContent);
+      novelIdea = $NovelIdeaGenerable.fromGeneratedContent(generatedContent);
     });
   }
 

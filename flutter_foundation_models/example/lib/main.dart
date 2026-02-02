@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foundation_models_example/my_weather.dart';
-import 'package:flutter_foundation_models_example/novel_generator.dart';
 
 void main() {
   runApp(const MyApp());

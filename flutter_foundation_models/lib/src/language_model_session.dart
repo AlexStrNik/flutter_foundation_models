@@ -1,24 +1,23 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
-import 'package:flutter_foundation_models/api/language_model_session_api.dart';
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
+import 'package:flutter_foundation_models/src/generated/foundation_models_api.g.dart';
+import 'package:flutter_foundation_models/src/pigeon_impl/flutter_api_impl.dart';
 
 final class LanguageModelSession {
   final List<Tool> tools;
 
-  final Map<String, Tool> _toolMap = {};
+  static final FlutterApiImpl _flutterApiImpl = FlutterApiImpl();
+  static bool _flutterApiSetUp = false;
 
-  late MethodChannel _toolChannel;
+  static final FoundationModelsHostApi _hostApi = FoundationModelsHostApi();
 
   LanguageModelSession({
     this.tools = const [],
   }) {
-    for (final tool in tools) {
-      if (_toolMap.containsKey(tool.name)) {
-        throw Exception("Tool with name ${tool.name} already exists");
-      }
-      _toolMap[tool.name] = tool;
+    if (!_flutterApiSetUp) {
+      FoundationModelsFlutterApi.setUp(_flutterApiImpl);
+      _flutterApiSetUp = true;
     }
 
     _initInBackground();
@@ -29,37 +28,49 @@ final class LanguageModelSession {
 
   Future<void> _initInBackground() async {
     try {
-      final uuid = await LanguageModelSessionApi.instance.init(
-        tools: tools,
-      );
-      _toolChannel = MethodChannel("flutter_foundation_models.ToolChannel.$uuid");
-      _toolChannel.setMethodCallHandler(_handleToolCall);
-      _initCompleter.complete(uuid);
+      final toolMessages = tools.map((tool) {
+        return ToolDefinitionMessage(
+          name: tool.name,
+          description: tool.description,
+          parameters: _convertToNullableKeys(tool.parameters.toJson()),
+        );
+      }).toList();
+
+      final sessionId = await _hostApi.createSession(toolMessages);
+      _flutterApiImpl.registerSession(sessionId, tools);
+      _initCompleter.complete(sessionId);
     } catch (e) {
       _initCompleter.completeError(e);
     }
   }
 
-  Future<dynamic> _handleToolCall(MethodCall call) async {
-    final tool = _toolMap[call.method];
-    if (tool == null) {
-      throw Exception("Tool with name ${call.method} not found");
+  Map<String?, Object?> _convertToNullableKeys(Map<String, dynamic> map) {
+    final result = <String?, Object?>{};
+    for (final entry in map.entries) {
+      final value = entry.value;
+      if (value is Map<String, dynamic>) {
+        result[entry.key] = _convertToNullableKeys(value);
+      } else if (value is List) {
+        result[entry.key] = value.map((e) {
+          if (e is Map<String, dynamic>) {
+            return _convertToNullableKeys(e);
+          }
+          return e;
+        }).toList();
+      } else {
+        result[entry.key] = value;
+      }
     }
-
-    final result = await tool.call(
-      GeneratedContent(
-        call.arguments,
-      ),
-    );
-    return result.value;
+    return result;
   }
 
   Future<void> dispose() async {
     if (_isDisposed) return;
 
     try {
-      final uuid = await _initCompleter.future;
-      await LanguageModelSessionApi.instance.deinit(sessionId: uuid);
+      final sessionId = await _initCompleter.future;
+      _flutterApiImpl.unregisterSession(sessionId);
+      await _hostApi.destroySession(sessionId);
       _isDisposed = true;
     } catch (e) {
       rethrow;
@@ -72,34 +83,51 @@ final class LanguageModelSession {
     }
 
     try {
-      final uuid = await _initCompleter.future;
-      final response = await LanguageModelSessionApi.instance.respond(
-        sessionId: uuid,
-        prompt: to,
-      );
-
+      final sessionId = await _initCompleter.future;
+      final response = await _hostApi.respond(sessionId, to);
       return response;
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<GeneratedContent> respondWithSchema({required String to, required GenerationSchema schema}) async {
+  Future<GeneratedContent> respondWithSchema({
+    required String to,
+    required GenerationSchema schema,
+  }) async {
     if (_isDisposed) {
       throw Exception('Cannot respond with a disposed LanguageModelSession');
     }
 
     try {
-      final uuid = await _initCompleter.future;
-      final response = await LanguageModelSessionApi.instance.respondWithSchema(
-        sessionId: uuid,
-        prompt: to,
-        schema: schema,
-      );
-
-      return response;
+      final sessionId = await _initCompleter.future;
+      final schemaJson = _convertToNullableKeys(schema.toJson());
+      final response = await _hostApi.respondWithSchema(sessionId, to, schemaJson);
+      return GeneratedContent(_cleanMapKeys(response));
     } catch (e) {
       rethrow;
     }
+  }
+
+  Map<String, dynamic> _cleanMapKeys(Map<String?, Object?> map) {
+    final result = <String, dynamic>{};
+    for (final entry in map.entries) {
+      if (entry.key != null) {
+        final value = entry.value;
+        if (value is Map<String?, Object?>) {
+          result[entry.key!] = _cleanMapKeys(value);
+        } else if (value is List) {
+          result[entry.key!] = value.map((e) {
+            if (e is Map<String?, Object?>) {
+              return _cleanMapKeys(e);
+            }
+            return e;
+          }).toList();
+        } else {
+          result[entry.key!] = value;
+        }
+      }
+    }
+    return result;
   }
 }
