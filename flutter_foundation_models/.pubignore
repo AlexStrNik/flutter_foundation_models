@@ -1,0 +1,26 @@
+# Exclude example iOS build files but keep source code
+example/ios/Pods/
+example/ios/.symlinks/
+example/ios/Flutter/Flutter.podspec
+example/ios/Runner.xcworkspace/
+example/ios/Runner.xcodeproj/
+example/ios/Podfile.lock
+example/ios/Runner/Assets.xcassets/
+example/ios/Runner/Base.lproj/
+example/ios/Runner/Info.plist
+example/ios/Runner/Runner-Bridging-Header.h
+example/ios/RunnerTests/
+
+# Exclude build artifacts
+example/build/
+example/.dart_tool/
+
+# Exclude generated files (users will regenerate)
+example/lib/*.g.dart
+
+# Exclude pubspec overrides (local development only)
+pubspec_overrides.yaml
+example/pubspec_overrides.yaml
+
+# Pigeon source (not needed for users)
+pigeons/

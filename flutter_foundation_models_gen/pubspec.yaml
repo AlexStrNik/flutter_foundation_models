@@ -1,15 +1,13 @@
 name: flutter_foundation_models_gen
-description: "Code generator for Flutter Foundation Models"
-version: 0.0.1
-publish_to: none
-homepage:
+description: Code generator for Flutter Foundation Models. Generates schema and serialization code for @Generable classes.
+version: 0.1.1
+repository: https://github.com/AlexStrNik/flutter_foundation_models
 
 environment:
   sdk: ^3.5.3
 
 dependencies:
-  flutter_foundation_models_annotations:
-    path: ../flutter_foundation_models_annotations
+  flutter_foundation_models_annotations: ^0.1.1
   source_gen: ^1.5.0
   analyzer: ^6.7.0
   build: ^2.4.1

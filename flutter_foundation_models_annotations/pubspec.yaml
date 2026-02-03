@@ -1,6 +1,7 @@
 name: flutter_foundation_models_annotations
-description: A starting point for Dart libraries or applications.
-version: 1.0.0
+description: Annotations for Flutter Foundation Models. Use @Generable and @Guide to define structured output schemas.
+version: 0.1.1
+repository: https://github.com/AlexStrNik/flutter_foundation_models
 
 environment:
   sdk: ^3.5.3

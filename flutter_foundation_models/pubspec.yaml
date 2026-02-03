@@ -1,8 +1,7 @@
 name: flutter_foundation_models
-publish_to: none
-description: "A new Flutter plugin project."
-version: 0.0.1
-homepage:
+description: Flutter plugin for Apple's on-device Foundation Models. Generate text, structured output, and use tools with the on-device language model.
+version: 0.1.1
+repository: https://github.com/AlexStrNik/flutter_foundation_models
 
 environment:
   sdk: ^3.5.3
@@ -12,8 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
-  flutter_foundation_models_annotations:
-    path: ../flutter_foundation_models_annotations
+  flutter_foundation_models_annotations: ^0.1.1
 
 dev_dependencies:
   flutter_test:
