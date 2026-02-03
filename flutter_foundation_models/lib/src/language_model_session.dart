@@ -6,123 +6,72 @@ import 'package:flutter_foundation_models/src/pigeon_impl/flutter_api_impl.dart'
 
 /// A session for interacting with Apple's on-device Foundation Models.
 ///
-/// [LanguageModelSession] provides methods to generate text responses and
-/// structured content using Apple's on-device language model. It supports
-/// both one-shot and streaming generation, as well as tool use.
+/// Create a session using [LanguageModelSession.create].
 ///
-/// Before creating a session, check if the API is available:
+/// Example:
 /// ```dart
-/// if (await LanguageModelSession.isAvailable()) {
-///   final session = LanguageModelSession();
-///   // Use session...
-/// } else {
-///   // Foundation Models not available on this device
+/// if (await SystemLanguageModel.isAvailable) {
+///   final session = await LanguageModelSession.create();
+///   final response = await session.respondTo("What is Flutter?");
+///   session.dispose();
 /// }
 /// ```
-///
-/// Example usage:
-/// ```dart
-/// final session = LanguageModelSession();
-///
-/// // Simple text response
-/// final response = await session.respondTo("What is Flutter?");
-///
-/// // Structured output with schema
-/// final content = await session.respondToWithSchema(
-///   "Generate a user profile",
-///   schema: $UserProfileGenerable.generationSchema,
-/// );
-/// final profile = $UserProfileGenerable.fromGeneratedContent(content);
-///
-/// // Don't forget to dispose when done
-/// session.dispose();
-/// ```
-///
-/// For tool use, pass tools to the constructor:
-/// ```dart
-/// final session = LanguageModelSession(
-///   tools: [WeatherTool(), CalculatorTool()],
-/// );
-/// ```
 final class LanguageModelSession {
-  /// Checks if the Foundation Models API is available on this device.
-  ///
-  /// Returns `true` if the device is running iOS 26+ (or macOS 26+) and
-  /// the FoundationModels framework is available.
-  ///
-  /// Use this to conditionally enable AI features in your app:
-  /// ```dart
-  /// if (await LanguageModelSession.isAvailable()) {
-  ///   // Show AI-powered features
-  /// } else {
-  ///   // Hide or disable AI features
-  /// }
-  /// ```
-  static Future<bool> isAvailable() async {
-    try {
-      return await _hostApi.isAvailable();
-    } catch (_) {
-      return false;
-    }
-  }
+  final String _sessionId;
+  final SystemLanguageModel _model;
+  final List<Tool> _tools;
 
-  /// Tools available for the model to use during generation.
-  ///
-  /// Tools allow the model to call external functions to retrieve information
-  /// or perform actions. The model will automatically call tools when needed
-  /// based on the user's prompt.
-  final List<Tool> tools;
-
-  /// System instructions that guide the model's behavior.
-  ///
-  /// Instructions provide context and guidelines for how the model should
-  /// respond. They are included at the beginning of the conversation.
-  final String? instructions;
+  bool _isDisposed = false;
+  final Set<String> _activeStreams = {};
 
   static final FlutterApiImpl _flutterApiImpl = FlutterApiImpl();
   static bool _flutterApiSetUp = false;
-
   static final FoundationModelsHostApi _hostApi = FoundationModelsHostApi();
+
+  LanguageModelSession._(this._sessionId, this._model, this._tools);
+
+  /// The language model used by this session.
+  SystemLanguageModel get model => _model;
+
+  /// Tools available for the model to use.
+  List<Tool> get tools => _tools;
 
   /// Creates a new language model session.
   ///
+  /// [model] - The language model to use. Defaults to [SystemLanguageModel.defaultModel].
   /// [tools] - Optional list of tools the model can use.
   /// [instructions] - Optional system instructions for the model.
-  LanguageModelSession({
-    this.tools = const [],
-    this.instructions,
-  }) {
+  static Future<LanguageModelSession> create({
+    SystemLanguageModel? model,
+    List<Tool> tools = const [],
+    String? instructions,
+  }) async {
     if (!_flutterApiSetUp) {
       FoundationModelsFlutterApi.setUp(_flutterApiImpl);
       _flutterApiSetUp = true;
     }
 
-    _initInBackground();
+    final effectiveModel = model ?? SystemLanguageModel.defaultModel;
+
+    final toolMessages = tools.map((tool) {
+      return ToolDefinitionMessage(
+        name: tool.name,
+        description: tool.description,
+        parameters: _convertToNullableKeys(tool.parameters.toJson()),
+      );
+    }).toList();
+
+    final sessionId = await _hostApi.createSession(
+      effectiveModel.modelId,
+      toolMessages,
+      instructions,
+    );
+
+    _flutterApiImpl.registerSession(sessionId, tools);
+    return LanguageModelSession._(sessionId, effectiveModel, tools);
   }
 
-  final Completer<String> _initCompleter = Completer<String>();
-  bool _isDisposed = false;
-  final Set<String> _activeStreams = {};
-
-  Future<void> _initInBackground() async {
-    try {
-      final toolMessages = tools.map((tool) {
-        return ToolDefinitionMessage(
-          name: tool.name,
-          description: tool.description,
-          parameters: _convertToNullableKeys(tool.parameters.toJson()),
-        );
-      }).toList();
-
-      final sessionId = await _hostApi.createSession(toolMessages, instructions);
-      _flutterApiImpl.registerSession(sessionId, tools);
-      _initCompleter.complete(sessionId);
-    } catch (e) {
-      _initCompleter.completeError(e);
-    }
-  }
-
-  Map<String?, Object?> _convertToNullableKeys(Map<String, dynamic> map) {
+  static Map<String?, Object?> _convertToNullableKeys(Map<String, dynamic> map) {
     final result = <String?, Object?>{};
     for (final entry in map.entries) {
       final value = entry.value;
@@ -142,44 +91,43 @@ final class LanguageModelSession {
     return result;
   }
 
+  /// Whether the session is currently responding.
+  Future<bool> get isResponding async {
+    if (_isDisposed) return false;
+    try {
+      return await _hostApi.isSessionResponding(_sessionId);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Prewarms the session to reduce latency on the first request.
+  Future<void> prewarm({String? promptPrefix}) async {
+    if (_isDisposed) {
+      throw Exception('Cannot prewarm a disposed LanguageModelSession');
+    }
+    await _hostApi.prewarmSession(_sessionId, promptPrefix);
+  }
+
   /// Disposes the session and releases resources.
-  ///
-  /// Always call this method when you're done using the session to free
-  /// native resources. After disposal, the session cannot be used again.
   Future<void> dispose() async {
     if (_isDisposed) return;
 
-    // Cancel all active streams
     for (final streamId in _activeStreams.toList()) {
       try {
         await _hostApi.cancelStream(streamId);
       } catch (_) {}
       _flutterApiImpl.unregisterStream(streamId);
+      _flutterApiImpl.unregisterTextStream(streamId);
     }
     _activeStreams.clear();
 
-    try {
-      final sessionId = await _initCompleter.future;
-      _flutterApiImpl.unregisterSession(sessionId);
-      await _hostApi.destroySession(sessionId);
-      _isDisposed = true;
-    } catch (e) {
-      rethrow;
-    }
+    _flutterApiImpl.unregisterSession(_sessionId);
+    await _hostApi.destroySession(_sessionId);
+    _isDisposed = true;
   }
 
   /// Generates a text response for the given prompt.
-  ///
-  /// This method sends the [prompt] to the language model and returns
-  /// the generated text response. If tools are configured, the model
-  /// may call them to gather information before responding.
-  ///
-  /// [prompt] - The user's input prompt.
-  /// [options] - Optional generation options for controlling output.
-  ///
-  /// Returns the generated text response.
-  ///
-  /// Throws an [Exception] if the session has been disposed.
   Future<String> respondTo(
     String prompt, {
     GenerationOptions? options,
@@ -187,41 +135,80 @@ final class LanguageModelSession {
     if (_isDisposed) {
       throw Exception('Cannot respond with a disposed LanguageModelSession');
     }
+    return await _hostApi.respondTo(_sessionId, prompt, _convertOptions(options));
+  }
 
+  /// Streams a text response for the given prompt.
+  Stream<String> streamResponseTo(
+    String prompt, {
+    GenerationOptions? options,
+  }) {
+    if (_isDisposed) {
+      throw Exception('Cannot stream with a disposed LanguageModelSession');
+    }
+
+    late StreamController<String> controller;
+
+    controller = StreamController<String>(
+      onCancel: () async {
+        final streamId = controller.hashCode.toString();
+        if (_activeStreams.contains(streamId)) {
+          try {
+            await _hostApi.cancelStream(streamId);
+          } catch (_) {}
+          _flutterApiImpl.unregisterTextStream(streamId);
+          _activeStreams.remove(streamId);
+        }
+      },
+    );
+
+    _startTextStream(controller, prompt, options);
+    return controller.stream;
+  }
+
+  Future<void> _startTextStream(
+    StreamController<String> controller,
+    String prompt,
+    GenerationOptions? options,
+  ) async {
     try {
-      final sessionId = await _initCompleter.future;
-      final response = await _hostApi.respondTo(
-        sessionId,
+      final streamId = await _hostApi.streamResponseTo(
+        _sessionId,
         prompt,
         _convertOptions(options),
       );
-      return response;
+
+      _activeStreams.add(streamId);
+
+      _flutterApiImpl.registerTextStream(
+        streamId,
+        onUpdate: (text) {
+          if (!controller.isClosed) controller.add(text);
+        },
+        onComplete: (finalText) {
+          if (!controller.isClosed) {
+            controller.add(finalText);
+            controller.close();
+          }
+          _activeStreams.remove(streamId);
+        },
+        onError: (errorCode, errorMessage) {
+          if (!controller.isClosed) {
+            controller.addError(Exception('$errorCode: $errorMessage'));
+            controller.close();
+          }
+          _activeStreams.remove(streamId);
+        },
+      );
     } catch (e) {
-      rethrow;
+      if (!controller.isClosed) {
+        controller.addError(e);
+        controller.close();
+      }
     }
   }
 
   /// Generates structured content according to a schema.
-  ///
-  /// This method sends the [prompt] to the language model and returns
-  /// content that conforms to the provided [schema]. Use this for generating
-  /// typed data structures like objects, lists, and enums.
-  ///
-  /// [prompt] - The user's input prompt.
-  /// [schema] - The schema defining the structure of the output.
-  /// [includeSchemaInPrompt] - Whether to include schema description in the prompt.
-  /// [options] - Optional generation options for controlling output.
-  ///
-  /// Returns [GeneratedContent] that can be converted to typed objects.
-  ///
-  /// Example:
-  /// ```dart
-  /// final content = await session.respondToWithSchema(
-  ///   "Generate a novel idea",
-  ///   schema: $NovelIdeaGenerable.generationSchema,
-  /// );
-  /// final novelIdea = $NovelIdeaGenerable.fromGeneratedContent(content);
-  /// ```
   Future<GeneratedContent> respondToWithSchema(
     String prompt, {
     required GenerationSchema schema,
@@ -232,47 +219,18 @@ final class LanguageModelSession {
       throw Exception('Cannot respond with a disposed LanguageModelSession');
     }
 
-    try {
-      final sessionId = await _initCompleter.future;
-      final schemaJson = _convertToNullableKeys(schema.toJson());
-      final response = await _hostApi.respondToWithSchema(
-        sessionId,
-        prompt,
-        schemaJson,
-        includeSchemaInPrompt,
-        _convertOptions(options),
-      );
-      return GeneratedContent(_cleanMapKeys(response));
-    } catch (e) {
-      rethrow;
-    }
+    final schemaJson = _convertToNullableKeys(schema.toJson());
+    final response = await _hostApi.respondToWithSchema(
+      _sessionId,
+      prompt,
+      schemaJson,
+      includeSchemaInPrompt,
+      _convertOptions(options),
+    );
+    return GeneratedContent(_cleanMapKeys(response));
   }
 
   /// Streams structured content as it's generated.
-  ///
-  /// Similar to [respondToWithSchema], but returns a [Stream] that emits
-  /// partial content as the model generates it. This allows showing
-  /// progressive updates in the UI.
-  ///
-  /// [prompt] - The user's input prompt.
-  /// [schema] - The schema defining the structure of the output.
-  /// [includeSchemaInPrompt] - Whether to include schema description in the prompt.
-  /// [options] - Optional generation options for controlling output.
-  ///
-  /// Returns a [Stream] of [GeneratedContent] with partial results.
-  ///
-  /// Example:
-  /// ```dart
-  /// final stream = session.streamResponseToWithSchema(
-  ///   "Generate a novel idea",
-  ///   schema: $NovelIdeaGenerable.generationSchema,
-  /// );
-  ///
-  /// stream.listen((partialContent) {
-  ///   final partial = $NovelIdeaGenerable.fromPartialGeneratedContent(partialContent);
-  ///   print('Title so far: ${partial.title ?? "..."}');
-  /// });
-  /// ```
   Stream<GeneratedContent> streamResponseToWithSchema(
     String prompt, {
     required GenerationSchema schema,
@@ -283,12 +241,10 @@ final class LanguageModelSession {
       throw Exception('Cannot stream with a disposed LanguageModelSession');
     }
 
-    // Create a stream controller to emit snapshots
     late StreamController<GeneratedContent> controller;
 
     controller = StreamController<GeneratedContent>(
       onCancel: () async {
-        // When the stream subscription is cancelled, cancel the native stream
         final streamId = controller.hashCode.toString();
         if (_activeStreams.contains(streamId)) {
           try {
@@ -300,9 +256,7 @@ final class LanguageModelSession {
       },
     );
 
-    // Start the stream asynchronously
     _startStream(controller, prompt, schema, includeSchemaInPrompt, options);
-
     return controller.stream;
   }
 
@@ -314,11 +268,10 @@ final class LanguageModelSession {
     GenerationOptions? options,
   ) async {
     try {
-      final sessionId = await _initCompleter.future;
       final schemaJson = _convertToNullableKeys(schema.toJson());
 
       final streamId = await _hostApi.streamResponseToWithSchema(
-        sessionId,
+        _sessionId,
         prompt,
         schemaJson,
         includeSchemaInPrompt,
@@ -327,13 +280,10 @@ final class LanguageModelSession {
 
       _activeStreams.add(streamId);
 
-      // Register callbacks to receive stream events
       _flutterApiImpl.registerStream(
         streamId,
         onSnapshot: (partialContent) {
-          if (!controller.isClosed) {
-            controller.add(partialContent);
-          }
+          if (!controller.isClosed) controller.add(partialContent);
         },
         onComplete: (finalContent) {
           if (!controller.isClosed) {

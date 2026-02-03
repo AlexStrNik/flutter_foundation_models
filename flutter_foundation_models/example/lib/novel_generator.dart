@@ -5,30 +5,40 @@ import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 import 'package:flutter_foundation_models_example/novel_idea.dart';
 
 class _NovelGeneratorState extends State<NovelGenerator> {
-  late LanguageModelSession _session;
+  LanguageModelSession? _session;
 
   $NovelIdeaPartial? partialNovelIdea;
   NovelIdea? novelIdea;
   bool isStreaming = false;
+  bool isInitializing = true;
   StreamSubscription<GeneratedContent>? _streamSubscription;
 
   @override
   void initState() {
     super.initState();
+    _initSession();
+  }
 
-    _session = LanguageModelSession();
+  Future<void> _initSession() async {
+    _session = await LanguageModelSession.create();
+    if (mounted) {
+      setState(() {
+        isInitializing = false;
+      });
+    }
   }
 
   @override
   void dispose() {
     _streamSubscription?.cancel();
-    _session.dispose();
+    _session?.dispose();
     super.dispose();
   }
 
   Future<void> generateNew() async {
+    if (_session == null) return;
     final schema = $NovelIdeaGenerable.generationSchema;
-    final generatedContent = await _session.respondToWithSchema(
+    final generatedContent = await _session!.respondToWithSchema(
       "Generate random novel idea",
       schema: schema,
     );
@@ -40,6 +50,7 @@ class _NovelGeneratorState extends State<NovelGenerator> {
   }
 
   void generateNewStreaming() {
+    if (_session == null) return;
     setState(() {
       isStreaming = true;
       novelIdea = null;
@@ -47,7 +58,7 @@ class _NovelGeneratorState extends State<NovelGenerator> {
     });
 
     final schema = $NovelIdeaGenerable.generationSchema;
-    final stream = _session.streamResponseToWithSchema(
+    final stream = _session!.streamResponseToWithSchema(
       "Generate random novel idea",
       schema: schema,
     );
@@ -98,6 +109,10 @@ class _NovelGeneratorState extends State<NovelGenerator> {
 
   @override
   Widget build(BuildContext context) {
+    if (isInitializing) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(

@@ -75,6 +75,18 @@ enum SamplingModeType: Int {
   case topP = 2
 }
 
+/// Use case for the model
+enum ModelUseCaseType: Int {
+  case general = 0
+  case contentTagging = 1
+}
+
+/// Guardrails setting for the model
+enum ModelGuardrailsType: Int {
+  case defaultGuardrails = 0
+  case permissiveContentTransformations = 1
+}
+
 /// Generated class from Pigeon that represents data sent in messages.
 struct ToolDefinitionMessage {
   var name: String
@@ -163,6 +175,89 @@ struct GenerationOptionsMessage {
   }
 }
 
+/// Configuration for creating a model
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct ModelConfigurationMessage {
+  /// Internal adapter ID (from adapters map on Swift side)
+  var adapterId: String? = nil
+  var useCase: ModelUseCaseType? = nil
+  var guardrails: ModelGuardrailsType? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> ModelConfigurationMessage? {
+    let adapterId: String? = nilOrValue(pigeonVar_list[0])
+    let useCase: ModelUseCaseType? = nilOrValue(pigeonVar_list[1])
+    let guardrails: ModelGuardrailsType? = nilOrValue(pigeonVar_list[2])
+
+    return ModelConfigurationMessage(
+      adapterId: adapterId,
+      useCase: useCase,
+      guardrails: guardrails
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      adapterId,
+      useCase,
+      guardrails,
+    ]
+  }
+}
+
+/// Message for creating an adapter
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct AdapterMessage {
+  var adapterId: String
+  var name: String
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> AdapterMessage? {
+    let adapterId = pigeonVar_list[0] as! String
+    let name = pigeonVar_list[1] as! String
+
+    return AdapterMessage(
+      adapterId: adapterId,
+      name: name
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      adapterId,
+      name,
+    ]
+  }
+}
+
+/// Model availability status
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct ModelAvailabilityMessage {
+  var isAvailable: Bool
+  var unavailableReason: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> ModelAvailabilityMessage? {
+    let isAvailable = pigeonVar_list[0] as! Bool
+    let unavailableReason: String? = nilOrValue(pigeonVar_list[1])
+
+    return ModelAvailabilityMessage(
+      isAvailable: isAvailable,
+      unavailableReason: unavailableReason
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      isAvailable,
+      unavailableReason,
+    ]
+  }
+}
+
 private class FoundationModelsApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -173,11 +268,29 @@ private class FoundationModelsApiPigeonCodecReader: FlutterStandardReader {
       }
       return nil
     case 130:
-      return ToolDefinitionMessage.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return ModelUseCaseType(rawValue: enumResultAsInt)
+      }
+      return nil
     case 131:
-      return SamplingModeMessage.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return ModelGuardrailsType(rawValue: enumResultAsInt)
+      }
+      return nil
     case 132:
+      return ToolDefinitionMessage.fromList(self.readValue() as! [Any?])
+    case 133:
+      return SamplingModeMessage.fromList(self.readValue() as! [Any?])
+    case 134:
       return GenerationOptionsMessage.fromList(self.readValue() as! [Any?])
+    case 135:
+      return ModelConfigurationMessage.fromList(self.readValue() as! [Any?])
+    case 136:
+      return AdapterMessage.fromList(self.readValue() as! [Any?])
+    case 137:
+      return ModelAvailabilityMessage.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -189,14 +302,29 @@ private class FoundationModelsApiPigeonCodecWriter: FlutterStandardWriter {
     if let value = value as? SamplingModeType {
       super.writeByte(129)
       super.writeValue(value.rawValue)
-    } else if let value = value as? ToolDefinitionMessage {
+    } else if let value = value as? ModelUseCaseType {
       super.writeByte(130)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? ModelGuardrailsType {
+      super.writeByte(131)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? ToolDefinitionMessage {
+      super.writeByte(132)
       super.writeValue(value.toList())
     } else if let value = value as? SamplingModeMessage {
-      super.writeByte(131)
+      super.writeByte(133)
       super.writeValue(value.toList())
     } else if let value = value as? GenerationOptionsMessage {
-      super.writeByte(132)
+      super.writeByte(134)
+      super.writeValue(value.toList())
+    } else if let value = value as? ModelConfigurationMessage {
+      super.writeByte(135)
+      super.writeValue(value.toList())
+    } else if let value = value as? AdapterMessage {
+      super.writeByte(136)
+      super.writeValue(value.toList())
+    } else if let value = value as? ModelAvailabilityMessage {
+      super.writeByte(137)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -224,9 +352,30 @@ protocol FoundationModelsHostApi {
   /// Checks if Foundation Models API is available on this device.
   /// Returns true if iOS 26+ and the FoundationModels framework is available.
   func isAvailable() throws -> Bool
-  func createSession(tools: [ToolDefinitionMessage], instructions: String?, completion: @escaping (Result<String, Error>) -> Void)
+  /// Gets detailed availability information including reason if unavailable.
+  func getModelAvailability() throws -> ModelAvailabilityMessage
+  /// Creates an adapter. Returns adapter ID.
+  /// Either name or assetPath must be provided.
+  func createAdapter(name: String?, assetPath: String?, completion: @escaping (Result<String, Error>) -> Void)
+  /// Destroys an adapter by ID.
+  func destroyAdapter(adapterId: String, completion: @escaping (Result<Void, Error>) -> Void)
+  /// Creates a model with optional configuration.
+  /// Returns a model ID.
+  func createModel(configuration: ModelConfigurationMessage?, completion: @escaping (Result<String, Error>) -> Void)
+  /// Destroys a model by ID.
+  func destroyModel(modelId: String, completion: @escaping (Result<Void, Error>) -> Void)
+  /// Creates a session with the given model ID.
+  func createSession(modelId: String, tools: [ToolDefinitionMessage], instructions: String?, completion: @escaping (Result<String, Error>) -> Void)
   func destroySession(sessionId: String, completion: @escaping (Result<Void, Error>) -> Void)
+  /// Returns whether the session is currently responding.
+  func isSessionResponding(sessionId: String, completion: @escaping (Result<Bool, Error>) -> Void)
+  /// Prewarms the session with an optional prompt prefix.
+  func prewarmSession(sessionId: String, promptPrefix: String?, completion: @escaping (Result<Void, Error>) -> Void)
   func respondTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
+  /// Starts a text streaming response. Returns a stream ID.
+  /// Updates will be sent via FlutterApi.onTextStreamUpdate.
+  /// Completion will be sent via FlutterApi.onTextStreamComplete.
+  func streamResponseTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
   func respondToWithSchema(sessionId: String, prompt: String, schema: [String?: Any?], includeSchemaInPrompt: Bool, options: GenerationOptionsMessage?, completion: @escaping (Result<[String?: Any?], Error>) -> Void)
   /// Starts a streaming response. Returns a stream ID.
   /// Snapshots will be sent via FlutterApi.onStreamSnapshot.
@@ -257,13 +406,104 @@ class FoundationModelsHostApiSetup {
     } else {
       isAvailableChannel.setMessageHandler(nil)
     }
+    /// Gets detailed availability information including reason if unavailable.
+    let getModelAvailabilityChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.getModelAvailability\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      getModelAvailabilityChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.getModelAvailability()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      getModelAvailabilityChannel.setMessageHandler(nil)
+    }
+    /// Creates an adapter. Returns adapter ID.
+    /// Either name or assetPath must be provided.
+    let createAdapterChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createAdapter\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      createAdapterChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let nameArg: String? = nilOrValue(args[0])
+        let assetPathArg: String? = nilOrValue(args[1])
+        api.createAdapter(name: nameArg, assetPath: assetPathArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      createAdapterChannel.setMessageHandler(nil)
+    }
+    /// Destroys an adapter by ID.
+    let destroyAdapterChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.destroyAdapter\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      destroyAdapterChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let adapterIdArg = args[0] as! String
+        api.destroyAdapter(adapterId: adapterIdArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      destroyAdapterChannel.setMessageHandler(nil)
+    }
+    /// Creates a model with optional configuration.
+    /// Returns a model ID.
+    let createModelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createModel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      createModelChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let configurationArg: ModelConfigurationMessage? = nilOrValue(args[0])
+        api.createModel(configuration: configurationArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      createModelChannel.setMessageHandler(nil)
+    }
+    /// Destroys a model by ID.
+    let destroyModelChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.destroyModel\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      destroyModelChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let modelIdArg = args[0] as! String
+        api.destroyModel(modelId: modelIdArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      destroyModelChannel.setMessageHandler(nil)
+    }
+    /// Creates a session with the given model ID.
     let createSessionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createSession\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       createSessionChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
-        let toolsArg = args[0] as! [ToolDefinitionMessage]
-        let instructionsArg: String? = nilOrValue(args[1])
-        api.createSession(tools: toolsArg, instructions: instructionsArg) { result in
+        let modelIdArg = args[0] as! String
+        let toolsArg = args[1] as! [ToolDefinitionMessage]
+        let instructionsArg: String? = nilOrValue(args[2])
+        api.createSession(modelId: modelIdArg, tools: toolsArg, instructions: instructionsArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -292,6 +532,43 @@ class FoundationModelsHostApiSetup {
     } else {
       destroySessionChannel.setMessageHandler(nil)
     }
+    /// Returns whether the session is currently responding.
+    let isSessionRespondingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.isSessionResponding\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      isSessionRespondingChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let sessionIdArg = args[0] as! String
+        api.isSessionResponding(sessionId: sessionIdArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      isSessionRespondingChannel.setMessageHandler(nil)
+    }
+    /// Prewarms the session with an optional prompt prefix.
+    let prewarmSessionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.prewarmSession\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      prewarmSessionChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let sessionIdArg = args[0] as! String
+        let promptPrefixArg: String? = nilOrValue(args[1])
+        api.prewarmSession(sessionId: sessionIdArg, promptPrefix: promptPrefixArg) { result in
+          switch result {
+          case .success:
+            reply(wrapResult(nil))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      prewarmSessionChannel.setMessageHandler(nil)
+    }
     let respondToChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondTo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       respondToChannel.setMessageHandler { message, reply in
@@ -310,6 +587,28 @@ class FoundationModelsHostApiSetup {
       }
     } else {
       respondToChannel.setMessageHandler(nil)
+    }
+    /// Starts a text streaming response. Returns a stream ID.
+    /// Updates will be sent via FlutterApi.onTextStreamUpdate.
+    /// Completion will be sent via FlutterApi.onTextStreamComplete.
+    let streamResponseToChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.streamResponseTo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      streamResponseToChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let sessionIdArg = args[0] as! String
+        let promptArg = args[1] as! String
+        let optionsArg: GenerationOptionsMessage? = nilOrValue(args[2])
+        api.streamResponseTo(sessionId: sessionIdArg, prompt: promptArg, options: optionsArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      streamResponseToChannel.setMessageHandler(nil)
     }
     let respondToWithSchemaChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondToWithSchema\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
@@ -379,6 +678,10 @@ class FoundationModelsHostApiSetup {
 /// Generated protocol from Pigeon that represents Flutter messages that can be called from Swift.
 protocol FoundationModelsFlutterApiProtocol {
   func invokeTool(sessionId sessionIdArg: String, toolName toolNameArg: String, arguments argumentsArg: [String?: Any?], completion: @escaping (Result<[String?: Any?], PigeonError>) -> Void)
+  /// Called when new text is available during text streaming.
+  func onTextStreamUpdate(streamId streamIdArg: String, text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  /// Called when text streaming completes successfully.
+  func onTextStreamComplete(streamId streamIdArg: String, finalText finalTextArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
   /// Called when a new snapshot is available during streaming.
   func onStreamSnapshot(streamId streamIdArg: String, partialContent partialContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void)
   /// Called when streaming completes successfully.
@@ -414,6 +717,44 @@ class FoundationModelsFlutterApi: FoundationModelsFlutterApiProtocol {
       } else {
         let result = listResponse[0] as! [String?: Any?]
         completion(.success(result))
+      }
+    }
+  }
+  /// Called when new text is available during text streaming.
+  func onTextStreamUpdate(streamId streamIdArg: String, text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamUpdate\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([streamIdArg, textArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(Void()))
+      }
+    }
+  }
+  /// Called when text streaming completes successfully.
+  func onTextStreamComplete(streamId streamIdArg: String, finalText finalTextArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+    let channelName: String = "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete\(messageChannelSuffix)"
+    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+    channel.sendMessage([streamIdArg, finalTextArg] as [Any?]) { response in
+      guard let listResponse = response as? [Any?] else {
+        completion(.failure(createConnectionError(withChannelName: channelName)))
+        return
+      }
+      if listResponse.count > 1 {
+        let code: String = listResponse[0] as! String
+        let message: String? = nilOrValue(listResponse[1])
+        let details: String? = nilOrValue(listResponse[2])
+        completion(.failure(PigeonError(code: code, message: message, details: details)))
+      } else {
+        completion(.success(Void()))
       }
     }
   }

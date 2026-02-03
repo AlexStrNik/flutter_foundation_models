@@ -9,15 +9,17 @@
 /// ```dart
 /// import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 ///
-/// // Create a session
-/// final session = LanguageModelSession();
+/// // Check availability and create a session
+/// if (await SystemLanguageModel.isAvailable) {
+///   final session = await LanguageModelSession.create();
 ///
-/// // Generate text
-/// final response = await session.respondTo("What is Flutter?");
-/// print(response);
+///   // Generate text
+///   final response = await session.respondTo("What is Flutter?");
+///   print(response);
 ///
-/// // Clean up
-/// session.dispose();
+///   // Clean up
+///   session.dispose();
+/// }
 /// ```
 ///
 /// ## Structured Output
@@ -86,7 +88,7 @@
 ///   }
 /// }
 ///
-/// final session = LanguageModelSession(tools: [WeatherTool()]);
+/// final session = await LanguageModelSession.create(tools: [WeatherTool()]);
 /// ```
 library flutter_foundation_models;
 
@@ -94,6 +96,7 @@ export 'src/generated_content.dart';
 export 'src/generation_options.dart';
 export 'src/generation_schema.dart';
 export 'src/language_model_session.dart';
+export 'src/system_language_model.dart';
 export 'src/tool.dart';
 
 export 'package:flutter_foundation_models_annotations/flutter_foundation_models_annotations.dart';

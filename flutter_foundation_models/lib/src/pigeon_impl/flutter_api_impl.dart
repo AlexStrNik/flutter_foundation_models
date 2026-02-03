@@ -3,12 +3,16 @@ import 'dart:async';
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 import 'package:flutter_foundation_models/src/generated/foundation_models_api.g.dart';
 
-/// Callback types for streaming
+/// Callback types for structured streaming
 typedef StreamSnapshotCallback = void Function(GeneratedContent partialContent);
 typedef StreamCompleteCallback = void Function(GeneratedContent finalContent);
 typedef StreamErrorCallback = void Function(String errorCode, String errorMessage);
 
-/// Holds callbacks for an active stream
+/// Callback types for text streaming
+typedef TextStreamUpdateCallback = void Function(String text);
+typedef TextStreamCompleteCallback = void Function(String finalText);
+
+/// Holds callbacks for an active structured stream
 class _StreamCallbacks {
   final StreamSnapshotCallback onSnapshot;
   final StreamCompleteCallback onComplete;
@@ -21,11 +25,25 @@ class _StreamCallbacks {
   });
 }
 
+/// Holds callbacks for an active text stream
+class _TextStreamCallbacks {
+  final TextStreamUpdateCallback onUpdate;
+  final TextStreamCompleteCallback onComplete;
+  final StreamErrorCallback onError;
+
+  _TextStreamCallbacks({
+    required this.onUpdate,
+    required this.onComplete,
+    required this.onError,
+  });
+}
+
 class FlutterApiImpl implements FoundationModelsFlutterApi {
   FlutterApiImpl();
 
   final Map<String, Map<String, Tool>> _sessionTools = {};
   final Map<String, _StreamCallbacks> _streamCallbacks = {};
+  final Map<String, _TextStreamCallbacks> _textStreamCallbacks = {};
 
   void registerSession(String sessionId, List<Tool> tools) {
     final toolMap = <String, Tool>{};
@@ -39,7 +57,7 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
     _sessionTools.remove(sessionId);
   }
 
-  /// Registers callbacks for a stream
+  /// Registers callbacks for a structured stream
   void registerStream(
     String streamId, {
     required StreamSnapshotCallback onSnapshot,
@@ -53,9 +71,28 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
     );
   }
 
-  /// Unregisters callbacks for a stream
+  /// Unregisters callbacks for a structured stream
   void unregisterStream(String streamId) {
     _streamCallbacks.remove(streamId);
+  }
+
+  /// Registers callbacks for a text stream
+  void registerTextStream(
+    String streamId, {
+    required TextStreamUpdateCallback onUpdate,
+    required TextStreamCompleteCallback onComplete,
+    required StreamErrorCallback onError,
+  }) {
+    _textStreamCallbacks[streamId] = _TextStreamCallbacks(
+      onUpdate: onUpdate,
+      onComplete: onComplete,
+      onError: onError,
+    );
+  }
+
+  /// Unregisters callbacks for a text stream
+  void unregisterTextStream(String streamId) {
+    _textStreamCallbacks.remove(streamId);
   }
 
   @override
@@ -81,6 +118,23 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
   }
 
   @override
+  void onTextStreamUpdate(String streamId, String text) {
+    final callbacks = _textStreamCallbacks[streamId];
+    if (callbacks != null) {
+      callbacks.onUpdate(text);
+    }
+  }
+
+  @override
+  void onTextStreamComplete(String streamId, String finalText) {
+    final callbacks = _textStreamCallbacks[streamId];
+    if (callbacks != null) {
+      callbacks.onComplete(finalText);
+      _textStreamCallbacks.remove(streamId);
+    }
+  }
+
+  @override
   void onStreamSnapshot(String streamId, Map<String?, Object?> partialContent) {
     final callbacks = _streamCallbacks[streamId];
     if (callbacks != null) {
@@ -101,10 +155,19 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
 
   @override
   void onStreamError(String streamId, String errorCode, String errorMessage) {
+    // Check structured stream callbacks
     final callbacks = _streamCallbacks[streamId];
     if (callbacks != null) {
       callbacks.onError(errorCode, errorMessage);
       _streamCallbacks.remove(streamId);
+      return;
+    }
+
+    // Check text stream callbacks
+    final textCallbacks = _textStreamCallbacks[streamId];
+    if (textCallbacks != null) {
+      textCallbacks.onError(errorCode, errorMessage);
+      _textStreamCallbacks.remove(streamId);
     }
   }
 

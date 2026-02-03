@@ -32,6 +32,18 @@ enum SamplingModeType {
   topP,
 }
 
+/// Use case for the model
+enum ModelUseCaseType {
+  general,
+  contentTagging,
+}
+
+/// Guardrails setting for the model
+enum ModelGuardrailsType {
+  defaultGuardrails,
+  permissiveContentTransformations,
+}
+
 class ToolDefinitionMessage {
   ToolDefinitionMessage({
     required this.name,
@@ -130,6 +142,93 @@ class GenerationOptionsMessage {
   }
 }
 
+/// Configuration for creating a model
+class ModelConfigurationMessage {
+  ModelConfigurationMessage({
+    this.adapterId,
+    this.useCase,
+    this.guardrails,
+  });
+
+  /// Internal adapter ID (from adapters map on Swift side)
+  String? adapterId;
+
+  ModelUseCaseType? useCase;
+
+  ModelGuardrailsType? guardrails;
+
+  Object encode() {
+    return <Object?>[
+      adapterId,
+      useCase,
+      guardrails,
+    ];
+  }
+
+  static ModelConfigurationMessage decode(Object result) {
+    result as List<Object?>;
+    return ModelConfigurationMessage(
+      adapterId: result[0] as String?,
+      useCase: result[1] as ModelUseCaseType?,
+      guardrails: result[2] as ModelGuardrailsType?,
+    );
+  }
+}
+
+/// Message for creating an adapter
+class AdapterMessage {
+  AdapterMessage({
+    required this.adapterId,
+    required this.name,
+  });
+
+  String adapterId;
+
+  String name;
+
+  Object encode() {
+    return <Object?>[
+      adapterId,
+      name,
+    ];
+  }
+
+  static AdapterMessage decode(Object result) {
+    result as List<Object?>;
+    return AdapterMessage(
+      adapterId: result[0]! as String,
+      name: result[1]! as String,
+    );
+  }
+}
+
+/// Model availability status
+class ModelAvailabilityMessage {
+  ModelAvailabilityMessage({
+    required this.isAvailable,
+    this.unavailableReason,
+  });
+
+  bool isAvailable;
+
+  String? unavailableReason;
+
+  Object encode() {
+    return <Object?>[
+      isAvailable,
+      unavailableReason,
+    ];
+  }
+
+  static ModelAvailabilityMessage decode(Object result) {
+    result as List<Object?>;
+    return ModelAvailabilityMessage(
+      isAvailable: result[0]! as bool,
+      unavailableReason: result[1] as String?,
+    );
+  }
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -141,14 +240,29 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is SamplingModeType) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    }    else if (value is ToolDefinitionMessage) {
+    }    else if (value is ModelUseCaseType) {
       buffer.putUint8(130);
+      writeValue(buffer, value.index);
+    }    else if (value is ModelGuardrailsType) {
+      buffer.putUint8(131);
+      writeValue(buffer, value.index);
+    }    else if (value is ToolDefinitionMessage) {
+      buffer.putUint8(132);
       writeValue(buffer, value.encode());
     }    else if (value is SamplingModeMessage) {
-      buffer.putUint8(131);
+      buffer.putUint8(133);
       writeValue(buffer, value.encode());
     }    else if (value is GenerationOptionsMessage) {
-      buffer.putUint8(132);
+      buffer.putUint8(134);
+      writeValue(buffer, value.encode());
+    }    else if (value is ModelConfigurationMessage) {
+      buffer.putUint8(135);
+      writeValue(buffer, value.encode());
+    }    else if (value is AdapterMessage) {
+      buffer.putUint8(136);
+      writeValue(buffer, value.encode());
+    }    else if (value is ModelAvailabilityMessage) {
+      buffer.putUint8(137);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -162,11 +276,23 @@ class _PigeonCodec extends StandardMessageCodec {
         final int? value = readValue(buffer) as int?;
         return value == null ? null : SamplingModeType.values[value];
       case 130: 
-        return ToolDefinitionMessage.decode(readValue(buffer)!);
+        final int? value = readValue(buffer) as int?;
+        return value == null ? null : ModelUseCaseType.values[value];
       case 131: 
-        return SamplingModeMessage.decode(readValue(buffer)!);
+        final int? value = readValue(buffer) as int?;
+        return value == null ? null : ModelGuardrailsType.values[value];
       case 132: 
+        return ToolDefinitionMessage.decode(readValue(buffer)!);
+      case 133: 
+        return SamplingModeMessage.decode(readValue(buffer)!);
+      case 134: 
         return GenerationOptionsMessage.decode(readValue(buffer)!);
+      case 135: 
+        return ModelConfigurationMessage.decode(readValue(buffer)!);
+      case 136: 
+        return AdapterMessage.decode(readValue(buffer)!);
+      case 137: 
+        return ModelAvailabilityMessage.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -215,7 +341,140 @@ class FoundationModelsHostApi {
     }
   }
 
-  Future<String> createSession(List<ToolDefinitionMessage> tools, String? instructions) async {
+  /// Gets detailed availability information including reason if unavailable.
+  Future<ModelAvailabilityMessage> getModelAvailability() async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.getModelAvailability$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(null) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as ModelAvailabilityMessage?)!;
+    }
+  }
+
+  /// Creates an adapter. Returns adapter ID.
+  /// Either name or assetPath must be provided.
+  Future<String> createAdapter(String? name, String? assetPath) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createAdapter$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[name, assetPath]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as String?)!;
+    }
+  }
+
+  /// Destroys an adapter by ID.
+  Future<void> destroyAdapter(String adapterId) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.destroyAdapter$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[adapterId]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else {
+      return;
+    }
+  }
+
+  /// Creates a model with optional configuration.
+  /// Returns a model ID.
+  Future<String> createModel(ModelConfigurationMessage? configuration) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createModel$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[configuration]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as String?)!;
+    }
+  }
+
+  /// Destroys a model by ID.
+  Future<void> destroyModel(String modelId) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.destroyModel$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[modelId]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else {
+      return;
+    }
+  }
+
+  /// Creates a session with the given model ID.
+  Future<String> createSession(String modelId, List<ToolDefinitionMessage> tools, String? instructions) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createSession$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -223,7 +482,7 @@ class FoundationModelsHostApi {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final List<Object?>? pigeonVar_replyList =
-        await pigeonVar_channel.send(<Object?>[tools, instructions]) as List<Object?>?;
+        await pigeonVar_channel.send(<Object?>[modelId, tools, instructions]) as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
     } else if (pigeonVar_replyList.length > 1) {
@@ -264,8 +523,89 @@ class FoundationModelsHostApi {
     }
   }
 
+  /// Returns whether the session is currently responding.
+  Future<bool> isSessionResponding(String sessionId) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.isSessionResponding$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[sessionId]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as bool?)!;
+    }
+  }
+
+  /// Prewarms the session with an optional prompt prefix.
+  Future<void> prewarmSession(String sessionId, String? promptPrefix) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.prewarmSession$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[sessionId, promptPrefix]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else {
+      return;
+    }
+  }
+
   Future<String> respondTo(String sessionId, String prompt, GenerationOptionsMessage? options) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondTo$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[sessionId, prompt, options]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as String?)!;
+    }
+  }
+
+  /// Starts a text streaming response. Returns a stream ID.
+  /// Updates will be sent via FlutterApi.onTextStreamUpdate.
+  /// Completion will be sent via FlutterApi.onTextStreamComplete.
+  Future<String> streamResponseTo(String sessionId, String prompt, GenerationOptionsMessage? options) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.streamResponseTo$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -377,6 +717,12 @@ abstract class FoundationModelsFlutterApi {
 
   Future<Map<String?, Object?>> invokeTool(String sessionId, String toolName, Map<String?, Object?> arguments);
 
+  /// Called when new text is available during text streaming.
+  void onTextStreamUpdate(String streamId, String text);
+
+  /// Called when text streaming completes successfully.
+  void onTextStreamComplete(String streamId, String finalText);
+
   /// Called when a new snapshot is available during streaming.
   void onStreamSnapshot(String streamId, Map<String?, Object?> partialContent);
 
@@ -411,6 +757,62 @@ abstract class FoundationModelsFlutterApi {
           try {
             final Map<String?, Object?> output = await api.invokeTool(arg_sessionId!, arg_toolName!, arg_arguments!);
             return wrapResponse(result: output);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamUpdate$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          assert(message != null,
+          'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamUpdate was null.');
+          final List<Object?> args = (message as List<Object?>?)!;
+          final String? arg_streamId = (args[0] as String?);
+          assert(arg_streamId != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamUpdate was null, expected non-null String.');
+          final String? arg_text = (args[1] as String?);
+          assert(arg_text != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamUpdate was null, expected non-null String.');
+          try {
+            api.onTextStreamUpdate(arg_streamId!, arg_text!);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          assert(message != null,
+          'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete was null.');
+          final List<Object?> args = (message as List<Object?>?)!;
+          final String? arg_streamId = (args[0] as String?);
+          assert(arg_streamId != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete was null, expected non-null String.');
+          final String? arg_finalText = (args[1] as String?);
+          assert(arg_finalText != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete was null, expected non-null String.');
+          try {
+            api.onTextStreamComplete(arg_streamId!, arg_finalText!);
+            return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
           }          catch (e) {

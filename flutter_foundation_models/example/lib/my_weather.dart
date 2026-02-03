@@ -36,7 +36,7 @@ class _MyWeatherState extends State<MyWeather> {
       _llmResponse = null;
     });
 
-    final session = LanguageModelSession(
+    final session = await LanguageModelSession.create(
       tools: [
         WeatherTool(
           temperature: _temperature,

@@ -5,12 +5,21 @@ import Foundation
 import FoundationModels
 #endif
 
-class FoundationModelsHostApiImpl: FoundationModelsHostApi {
-    #if canImport(FoundationModels)
-    private var sessions = [String: LanguageModelSession]()
-    private var activeStreams = [String: Task<Void, Never>]()
-    #endif
+#if canImport(FoundationModels)
+@available(iOS 26.0, *)
+final class ModelStorage {
+    static let shared = ModelStorage()
 
+    private init() {}
+
+    var adapters = [String: SystemLanguageModel.Adapter]()
+    var models = [String: SystemLanguageModel]()
+    var sessions = [String: LanguageModelSession]()
+    var activeStreams = [String: Task<Void, Never>]()
+}
+#endif
+
+class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     private var flutterApi: FoundationModelsFlutterApi?
 
     init(binaryMessenger: FlutterBinaryMessenger) {
@@ -20,13 +29,183 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     func isAvailable() throws -> Bool {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            return true
+            return SystemLanguageModel.default.isAvailable
         }
         #endif
         return false
     }
 
+    func getModelAvailability() throws -> ModelAvailabilityMessage {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            switch SystemLanguageModel.default.availability {
+            case .available:
+                return ModelAvailabilityMessage(isAvailable: true, unavailableReason: nil)
+            case .unavailable(let reason):
+                return ModelAvailabilityMessage(isAvailable: false, unavailableReason: "\(reason)")
+            @unknown default:
+                return ModelAvailabilityMessage(isAvailable: false, unavailableReason: "Unknown availability status")
+            }
+        }
+        #endif
+        return ModelAvailabilityMessage(isAvailable: false, unavailableReason: "Foundation Models API is not available on this device")
+    }
+
+    func createAdapter(
+        name: String?,
+        assetPath: String?,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            do {
+                let adapterId = UUID().uuidString
+                let adapter: SystemLanguageModel.Adapter
+
+                if let assetPath = assetPath {
+                    // Resolve Flutter asset path to file URL
+                    let key = FlutterDartProject.lookupKey(forAsset: assetPath)
+                    guard let bundlePath = Bundle.main.path(forResource: key, ofType: nil) else {
+                        completion(.failure(PigeonError(
+                            code: "ASSET_NOT_FOUND",
+                            message: "Asset not found: \(assetPath)",
+                            details: nil
+                        )))
+                        return
+                    }
+                    let fileURL = URL(fileURLWithPath: bundlePath)
+                    adapter = try SystemLanguageModel.Adapter(fileURL: fileURL)
+                } else if let name = name {
+                    adapter = try SystemLanguageModel.Adapter(name: name)
+                } else {
+                    completion(.failure(PigeonError(
+                        code: "INVALID_ARGUMENTS",
+                        message: "Either name or assetPath must be provided",
+                        details: nil
+                    )))
+                    return
+                }
+
+                ModelStorage.shared.adapters[adapterId] = adapter
+                completion(.success(adapterId))
+            } catch {
+                completion(.failure(PigeonError(
+                    code: "CREATE_ADAPTER_ERROR",
+                    message: error.localizedDescription,
+                    details: nil
+                )))
+            }
+            return
+        }
+        #endif
+        completion(.failure(PigeonError(
+            code: "UNAVAILABLE",
+            message: "Foundation Models API is not available on this device",
+            details: nil
+        )))
+    }
+
+    func destroyAdapter(
+        adapterId: String,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            ModelStorage.shared.adapters.removeValue(forKey: adapterId)
+            completion(.success(()))
+            return
+        }
+        #endif
+        completion(.success(()))
+    }
+
+    func createModel(
+        configuration: ModelConfigurationMessage?,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            let modelId = UUID().uuidString
+
+            // Determine guardrails
+            let guardrails: SystemLanguageModel.Guardrails
+            if let guardrailsType = configuration?.guardrails {
+                guardrails = switch guardrailsType {
+                case .defaultGuardrails:
+                    .default
+                case .permissiveContentTransformations:
+                    .permissiveContentTransformations
+                }
+            } else {
+                guardrails = .default
+            }
+
+            if let adapterId = configuration?.adapterId {
+                // Create with adapter from adapters map
+                guard let adapter = ModelStorage.shared.adapters[adapterId] else {
+                    completion(.failure(PigeonError(
+                        code: "ADAPTER_NOT_FOUND",
+                        message: "Adapter \(adapterId) not found",
+                        details: nil
+                    )))
+                    return
+                }
+                ModelStorage.shared.models[modelId] = SystemLanguageModel(adapter: adapter, guardrails: guardrails)
+            } else {
+                // Create with useCase
+                let useCase: SystemLanguageModel.UseCase
+                if let useCaseType = configuration?.useCase {
+                    useCase = switch useCaseType {
+                    case .general:
+                        .general
+                    case .contentTagging:
+                        .contentTagging
+                    }
+                } else {
+                    useCase = .general
+                }
+                ModelStorage.shared.models[modelId] = SystemLanguageModel(useCase: useCase, guardrails: guardrails)
+            }
+            completion(.success(modelId))
+            return
+        }
+        #endif
+        completion(.failure(PigeonError(
+            code: "UNAVAILABLE",
+            message: "Foundation Models API is not available on this device",
+            details: nil
+        )))
+    }
+
+    func destroyModel(
+        modelId: String,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            ModelStorage.shared.models.removeValue(forKey: modelId)
+            completion(.success(()))
+            return
+        }
+        #endif
+        completion(.success(()))
+    }
+
+    #if canImport(FoundationModels)
+    @available(iOS 26.0, *)
+    private func getModel(_ modelId: String) throws -> SystemLanguageModel {
+        if modelId == "default" {
+            return SystemLanguageModel.default
+        }
+        guard let model = ModelStorage.shared.models[modelId] else {
+            throw PigeonError(code: "MODEL_NOT_FOUND", message: "Model \(modelId) not found", details: nil)
+        }
+        return model
+    }
+    #endif
+
     func createSession(
+        modelId: String,
         tools: [ToolDefinitionMessage],
         instructions: String?,
         completion: @escaping (Result<String, Error>) -> Void
@@ -34,6 +213,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             do {
+                let model = try getModel(modelId)
                 let sessionId = UUID().uuidString
                 let flutterTools = try tools.map { tool -> FlutterTool in
                     try FlutterTool(
@@ -44,9 +224,9 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                 }
 
                 if let instructions = instructions {
-                    sessions[sessionId] = LanguageModelSession(tools: flutterTools, instructions: instructions)
+                    ModelStorage.shared.sessions[sessionId] = LanguageModelSession(model: model, tools: flutterTools, instructions: instructions)
                 } else {
-                    sessions[sessionId] = LanguageModelSession(tools: flutterTools)
+                    ModelStorage.shared.sessions[sessionId] = LanguageModelSession(model: model, tools: flutterTools)
                 }
                 completion(.success(sessionId))
             } catch {
@@ -72,7 +252,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     ) {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            guard sessions[sessionId] != nil else {
+            guard ModelStorage.shared.sessions[sessionId] != nil else {
                 completion(.failure(PigeonError(
                     code: "SESSION_NOT_FOUND",
                     message: "Session with id \(sessionId) not found",
@@ -81,7 +261,65 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                 return
             }
 
-            sessions.removeValue(forKey: sessionId)
+            ModelStorage.shared.sessions.removeValue(forKey: sessionId)
+            completion(.success(()))
+            return
+        }
+        #endif
+        completion(.failure(PigeonError(
+            code: "UNAVAILABLE",
+            message: "Foundation Models API is not available on this device",
+            details: nil
+        )))
+    }
+
+    func isSessionResponding(
+        sessionId: String,
+        completion: @escaping (Result<Bool, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            guard let session = ModelStorage.shared.sessions[sessionId] else {
+                completion(.failure(PigeonError(
+                    code: "SESSION_NOT_FOUND",
+                    message: "Session with id \(sessionId) not found",
+                    details: nil
+                )))
+                return
+            }
+
+            completion(.success(session.isResponding))
+            return
+        }
+        #endif
+        completion(.failure(PigeonError(
+            code: "UNAVAILABLE",
+            message: "Foundation Models API is not available on this device",
+            details: nil
+        )))
+    }
+
+    func prewarmSession(
+        sessionId: String,
+        promptPrefix: String?,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            guard let session = ModelStorage.shared.sessions[sessionId] else {
+                completion(.failure(PigeonError(
+                    code: "SESSION_NOT_FOUND",
+                    message: "Session with id \(sessionId) not found",
+                    details: nil
+                )))
+                return
+            }
+
+            if let prefix = promptPrefix {
+                session.prewarm(promptPrefix: Prompt(prefix))
+            } else {
+                session.prewarm()
+            }
             completion(.success(()))
             return
         }
@@ -101,7 +339,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     ) {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            guard let session = sessions[sessionId] else {
+            guard let session = ModelStorage.shared.sessions[sessionId] else {
                 completion(.failure(PigeonError(
                     code: "SESSION_NOT_FOUND",
                     message: "Session with id \(sessionId) not found",
@@ -134,6 +372,80 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         )))
     }
 
+    func streamResponseTo(
+        sessionId: String,
+        prompt: String,
+        options: GenerationOptionsMessage?,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            guard let session = ModelStorage.shared.sessions[sessionId] else {
+                completion(.failure(PigeonError(
+                    code: "SESSION_NOT_FOUND",
+                    message: "Session with id \(sessionId) not found",
+                    details: nil
+                )))
+                return
+            }
+
+            let generationOptions = convertOptions(options)
+            let streamId = UUID().uuidString
+
+            let task = Task {
+                do {
+                    let stream = session.streamResponse(to: prompt, options: generationOptions)
+
+                    var finalText = ""
+
+                    for try await snapshot in stream {
+                        if Task.isCancelled { break }
+
+                        finalText = snapshot.content
+
+                        await MainActor.run {
+                            self.flutterApi?.onTextStreamUpdate(
+                                streamId: streamId,
+                                text: snapshot.content
+                            ) { _ in }
+                        }
+                    }
+
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            self.flutterApi?.onTextStreamComplete(
+                                streamId: streamId,
+                                finalText: finalText
+                            ) { _ in }
+                        }
+                    }
+                } catch {
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            self.flutterApi?.onStreamError(
+                                streamId: streamId,
+                                errorCode: "STREAM_ERROR",
+                                errorMessage: error.localizedDescription
+                            ) { _ in }
+                        }
+                    }
+                }
+
+                ModelStorage.shared.activeStreams.removeValue(forKey: streamId)
+            }
+
+            ModelStorage.shared.activeStreams[streamId] = task
+            completion(.success(streamId))
+            return
+        }
+        #endif
+        completion(.failure(PigeonError(
+            code: "UNAVAILABLE",
+            message: "Foundation Models API is not available on this device",
+            details: nil
+        )))
+    }
+
     func respondToWithSchema(
         sessionId: String,
         prompt: String,
@@ -144,7 +456,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     ) {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            guard let session = sessions[sessionId] else {
+            guard let session = ModelStorage.shared.sessions[sessionId] else {
                 completion(.failure(PigeonError(
                     code: "SESSION_NOT_FOUND",
                     message: "Session with id \(sessionId) not found",
@@ -214,7 +526,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     ) {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            guard let session = sessions[sessionId] else {
+            guard let session = ModelStorage.shared.sessions[sessionId] else {
                 completion(.failure(PigeonError(
                     code: "SESSION_NOT_FOUND",
                     message: "Session with id \(sessionId) not found",
@@ -283,10 +595,10 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                     }
 
                     // Clean up
-                    self.activeStreams.removeValue(forKey: streamId)
+                    ModelStorage.shared.activeStreams.removeValue(forKey: streamId)
                 }
 
-                activeStreams[streamId] = task
+                ModelStorage.shared.activeStreams[streamId] = task
                 completion(.success(streamId))
 
             } catch {
@@ -312,9 +624,9 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
     ) {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            if let task = activeStreams[streamId] {
+            if let task = ModelStorage.shared.activeStreams[streamId] {
                 task.cancel()
-                activeStreams.removeValue(forKey: streamId)
+                ModelStorage.shared.activeStreams.removeValue(forKey: streamId)
             }
             completion(.success(()))
             return
