@@ -1,21 +1,15 @@
 PODS:
   - Flutter (1.0.0)
-  - flutter_foundation_models (0.0.1):
-    - Flutter
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
-  - flutter_foundation_models (from `.symlinks/plugins/flutter_foundation_models/ios`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
-  flutter_foundation_models:
-    :path: ".symlinks/plugins/flutter_foundation_models/ios"
 
 SPEC CHECKSUMS:
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
-  flutter_foundation_models: b3c262180822598b0c24d1ae923f03ccbf61d4e5
 
 PODFILE CHECKSUM: 6f6997b60ae9beb391105b6a000153553362004b
 

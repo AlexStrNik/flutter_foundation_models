@@ -2,7 +2,7 @@ import 'package:pigeon/pigeon.dart';
 
 @ConfigurePigeon(PigeonOptions(
   dartOut: 'lib/src/generated/foundation_models_api.g.dart',
-  swiftOut: 'ios/Classes/Generated/FoundationModelsApi.g.swift',
+  swiftOut: 'ios/flutter_foundation_models/Sources/flutter_foundation_models/FoundationModelsApi.g.swift',
 ))
 class ToolDefinitionMessage {
   ToolDefinitionMessage({

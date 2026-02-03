@@ -5,6 +5,7 @@
 - Moved `isAvailable` from `LanguageModelSession` to `SystemLanguageModel.isAvailable`
 
 ### New Features
+- **Swift Package Manager support** - Plugin now supports both SPM and CocoaPods
 - **SystemLanguageModel class** - Manage language models with configuration options
   - `SystemLanguageModel.defaultModel` - Access the default system model
   - `SystemLanguageModel.create()` - Create custom model with adapter, useCase, or guardrails

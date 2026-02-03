@@ -19,6 +19,10 @@ A Flutter plugin for Apple's on-device Foundation Models, available on iOS 26+ a
 
 **Note:** The package can be added to apps targeting iOS 16+, but the Foundation Models API is only available on iOS 26+. Use `SystemLanguageModel.isAvailable` to check availability at runtime.
 
+## Package Manager Support
+
+This plugin supports both **Swift Package Manager** and **CocoaPods**. SPM is recommended for new projects and provides faster build times.
+
 ## Installation
 
 Add to your `pubspec.yaml`:
