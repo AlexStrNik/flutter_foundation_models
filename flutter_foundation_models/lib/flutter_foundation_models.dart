@@ -15,7 +15,7 @@
 ///
 ///   // Generate text
 ///   final response = await session.respondTo("What is Flutter?");
-///   print(response);
+///   print(response.content);
 ///
 ///   // Clean up
 ///   session.dispose();
@@ -93,9 +93,11 @@
 library flutter_foundation_models;
 
 export 'src/generated_content.dart';
+export 'src/generation_error.dart';
 export 'src/generation_options.dart';
 export 'src/generation_schema.dart';
 export 'src/language_model_session.dart';
+export 'src/response.dart';
 export 'src/system_language_model.dart';
 export 'src/tool.dart';
 export 'src/transcript.dart';

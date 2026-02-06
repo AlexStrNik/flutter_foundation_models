@@ -38,13 +38,13 @@ class _NovelGeneratorState extends State<NovelGenerator> {
   Future<void> generateNew() async {
     if (_session == null) return;
     final schema = $NovelIdeaGenerable.generationSchema;
-    final generatedContent = await _session!.respondToWithSchema(
+    final response = await _session!.respondToWithSchema(
       "Generate random novel idea",
       schema: schema,
     );
 
     setState(() {
-      novelIdea = $NovelIdeaGenerable.fromGeneratedContent(generatedContent);
+      novelIdea = $NovelIdeaGenerable.fromGeneratedContent(response.content);
       partialNovelIdea = null;
     });
   }

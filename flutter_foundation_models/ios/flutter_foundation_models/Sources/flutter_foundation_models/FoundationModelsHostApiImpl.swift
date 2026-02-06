@@ -415,7 +415,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         sessionId: String,
         prompt: String,
         options: GenerationOptionsMessage?,
-        completion: @escaping (Result<String, Error>) -> Void
+        completion: @escaping (Result<TextResponseMessage, Error>) -> Void
     ) {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
@@ -433,13 +433,13 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
             Task {
                 do {
                     let result = try await session.respond(to: prompt, options: generationOptions)
-                    completion(.success(result.content))
-                } catch {
-                    completion(.failure(PigeonError(
-                        code: "RESPOND_ERROR",
-                        message: error.localizedDescription,
-                        details: nil
+                    let transcriptJson = encodeTranscriptEntries(Array(result.transcriptEntries))
+                    completion(.success(TextResponseMessage(
+                        content: result.content,
+                        transcriptJson: transcriptJson
                     )))
+                } catch {
+                    completion(.failure(mapGenerationError(error)))
                 }
             }
             return
@@ -492,20 +492,24 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                     }
 
                     if !Task.isCancelled {
+                        let response = try await stream.collect()
+                        let transcriptJson = self.encodeTranscriptEntries(Array(response.transcriptEntries))
                         await MainActor.run {
                             self.flutterApi?.onTextStreamComplete(
                                 streamId: streamId,
-                                finalText: finalText
+                                finalText: response.content,
+                                transcriptJson: transcriptJson
                             ) { _ in }
                         }
                     }
                 } catch {
                     if !Task.isCancelled {
+                        let (errorCode, errorMessage) = self.extractErrorInfo(error)
                         await MainActor.run {
                             self.flutterApi?.onStreamError(
                                 streamId: streamId,
-                                errorCode: "STREAM_ERROR",
-                                errorMessage: error.localizedDescription
+                                errorCode: errorCode,
+                                errorMessage: errorMessage
                             ) { _ in }
                         }
                     }
@@ -532,7 +536,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         schema: [String?: Any?],
         includeSchemaInPrompt: Bool,
         options: GenerationOptionsMessage?,
-        completion: @escaping (Result<[String?: Any?], Error>) -> Void
+        completion: @escaping (Result<StructuredResponseMessage, Error>) -> Void
     ) {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
@@ -558,12 +562,18 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                             includeSchemaInPrompt: includeSchemaInPrompt,
                             options: generationOptions
                         )
+                        let rawContentJson = result.rawContent.jsonString
                         let jsonData = result.content.jsonString.data(using: .utf8)!
                         let resultJson = try JSONSerialization.jsonObject(with: jsonData)
+                        let transcriptJson = encodeTranscriptEntries(Array(result.transcriptEntries))
 
                         if let resultDict = resultJson as? [String: Any?] {
                             let mappedResult = resultDict.mapToOptionalKeys()
-                            completion(.success(mappedResult))
+                            completion(.success(StructuredResponseMessage(
+                                content: mappedResult,
+                                rawContent: rawContentJson,
+                                transcriptJson: transcriptJson
+                            )))
                         } else {
                             completion(.failure(PigeonError(
                                 code: "INVALID_RESPONSE",
@@ -572,11 +582,7 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                             )))
                         }
                     } catch {
-                        completion(.failure(PigeonError(
-                            code: "RESPOND_ERROR",
-                            message: error.localizedDescription,
-                            details: nil
-                        )))
+                        completion(.failure(mapGenerationError(error)))
                     }
                 }
             } catch {
@@ -653,22 +659,33 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
                             }
                         }
 
-                        // Stream completed
-                        if !Task.isCancelled, let content = finalContent {
-                            await MainActor.run {
-                                self.flutterApi?.onStreamComplete(
-                                    streamId: streamId,
-                                    finalContent: content
-                                ) { _ in }
+                        // Stream completed - collect final response with transcript entries
+                        if !Task.isCancelled {
+                            let response = try await stream.collect()
+                            let rawContentJson = response.rawContent.jsonString
+                            let transcriptJson = self.encodeTranscriptEntries(Array(response.transcriptEntries))
+
+                            let jsonData = response.content.jsonString.data(using: .utf8)!
+                            if let jsonDict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any?] {
+                                let mappedContent = jsonDict.mapToOptionalKeys()
+                                await MainActor.run {
+                                    self.flutterApi?.onStreamComplete(
+                                        streamId: streamId,
+                                        finalContent: mappedContent,
+                                        rawContent: rawContentJson,
+                                        transcriptJson: transcriptJson
+                                    ) { _ in }
+                                }
                             }
                         }
                     } catch {
                         if !Task.isCancelled {
+                            let (errorCode, errorMessage) = self.extractErrorInfo(error)
                             await MainActor.run {
                                 self.flutterApi?.onStreamError(
                                     streamId: streamId,
-                                    errorCode: "STREAM_ERROR",
-                                    errorMessage: error.localizedDescription
+                                    errorCode: errorCode,
+                                    errorMessage: errorMessage
                                 ) { _ in }
                             }
                         }
@@ -756,6 +773,69 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
             temperature: options.temperature,
             maximumResponseTokens: maxTokens
         )
+    }
+
+    @available(iOS 26.0, *)
+    private func mapGenerationError(_ error: Error) -> PigeonError {
+        if let generationError = error as? LanguageModelSession.GenerationError {
+            let (errorCode, message, debugDescription) = mapGenerationErrorType(generationError)
+            return PigeonError(
+                code: errorCode,
+                message: message,
+                details: debugDescription
+            )
+        }
+        return PigeonError(
+            code: "unknown",
+            message: error.localizedDescription,
+            details: nil
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private func mapGenerationErrorType(_ error: LanguageModelSession.GenerationError) -> (String, String, String?) {
+        switch error {
+        case .exceededContextWindowSize(let context):
+            return ("exceededContextWindowSize", error.localizedDescription, context.debugDescription)
+        case .assetsUnavailable(let context):
+            return ("assetsUnavailable", error.localizedDescription, context.debugDescription)
+        case .guardrailViolation(let context):
+            return ("guardrailViolation", error.localizedDescription, context.debugDescription)
+        case .unsupportedGuide(let context):
+            return ("unsupportedGuide", error.localizedDescription, context.debugDescription)
+        case .unsupportedLanguageOrLocale(let context):
+            return ("unsupportedLanguageOrLocale", error.localizedDescription, context.debugDescription)
+        case .decodingFailure(let context):
+            return ("decodingFailure", error.localizedDescription, context.debugDescription)
+        case .rateLimited(let context):
+            return ("rateLimited", error.localizedDescription, context.debugDescription)
+        case .concurrentRequests(let context):
+            return ("concurrentRequests", error.localizedDescription, context.debugDescription)
+        case .refusal(_, let context):
+            return ("refusal", error.localizedDescription, context.debugDescription)
+        @unknown default:
+            return ("unknown", error.localizedDescription, nil)
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private func extractErrorInfo(_ error: Error) -> (String, String) {
+        if let generationError = error as? LanguageModelSession.GenerationError {
+            let (errorCode, message, _) = mapGenerationErrorType(generationError)
+            return (errorCode, message)
+        }
+        return ("unknown", error.localizedDescription)
+    }
+
+    @available(iOS 26.0, *)
+    private func encodeTranscriptEntries(_ entries: [Transcript.Entry]) -> String {
+        do {
+            let transcript = Transcript(entries: entries)
+            let jsonData = try JSONEncoder().encode(transcript)
+            return String(data: jsonData, encoding: .utf8) ?? "{}"
+        } catch {
+            return "{}"
+        }
     }
     #endif
 }

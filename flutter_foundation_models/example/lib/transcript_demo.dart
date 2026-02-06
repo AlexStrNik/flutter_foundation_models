@@ -77,7 +77,7 @@ class _TranscriptDemoState extends State<TranscriptDemo> {
       final response = await _session!.respondTo(text);
 
       setState(() {
-        _messages.add(_ChatMessage(role: 'assistant', content: response));
+        _messages.add(_ChatMessage(role: 'assistant', content: response.content));
       });
       _scrollToBottom();
     } catch (e) {

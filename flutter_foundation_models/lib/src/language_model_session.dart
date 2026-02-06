@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 import 'package:flutter_foundation_models/src/generated/foundation_models_api.g.dart';
@@ -13,6 +14,7 @@ import 'package:flutter_foundation_models/src/pigeon_impl/flutter_api_impl.dart'
 /// if (await SystemLanguageModel.isAvailable) {
 ///   final session = await LanguageModelSession.create();
 ///   final response = await session.respondTo("What is Flutter?");
+///   print(response.content);
 ///   session.dispose();
 /// }
 /// ```
@@ -177,14 +179,24 @@ final class LanguageModelSession {
   }
 
   /// Generates a text response for the given prompt.
-  Future<String> respondTo(
+  ///
+  /// Returns a [TextResponse] containing the generated text and transcript
+  /// entries created during this response.
+  ///
+  /// Throws [GenerationException] if generation fails.
+  Future<TextResponse> respondTo(
     String prompt, {
     GenerationOptions? options,
   }) async {
     if (_isDisposed) {
       throw Exception('Cannot respond with a disposed LanguageModelSession');
     }
-    return await _hostApi.respondTo(_sessionId, prompt, _convertOptions(options));
+    final response = await _hostApi.respondTo(_sessionId, prompt, _convertOptions(options));
+    final transcript = Transcript.fromJson(response.transcriptJson);
+    return TextResponse(
+      content: response.content,
+      transcriptEntries: transcript.entries,
+    );
   }
 
   /// Streams a text response for the given prompt.
@@ -234,7 +246,7 @@ final class LanguageModelSession {
         onUpdate: (text) {
           if (!controller.isClosed) controller.add(text);
         },
-        onComplete: (finalText) {
+        onComplete: (finalText, transcriptEntries) {
           if (!controller.isClosed) {
             controller.add(finalText);
             controller.close();
@@ -258,7 +270,12 @@ final class LanguageModelSession {
   }
 
   /// Generates structured content according to a schema.
-  Future<GeneratedContent> respondToWithSchema(
+  ///
+  /// Returns a [StructuredResponse] containing the generated content,
+  /// raw content, and transcript entries created during this response.
+  ///
+  /// Throws [GenerationException] if generation fails.
+  Future<StructuredResponse> respondToWithSchema(
     String prompt, {
     required GenerationSchema schema,
     bool includeSchemaInPrompt = true,
@@ -276,7 +293,36 @@ final class LanguageModelSession {
       includeSchemaInPrompt,
       _convertOptions(options),
     );
-    return GeneratedContent(_cleanMapKeys(response));
+
+    final transcript = Transcript.fromJson(response.transcriptJson);
+    final rawContent = GeneratedContent(
+      Map<String, dynamic>.from(
+        (response.rawContent.isNotEmpty)
+            ? (Map<String, dynamic>.from(
+                _cleanMapKeys(_parseJson(response.rawContent)),
+              ))
+            : {},
+      ),
+    );
+
+    return StructuredResponse(
+      content: GeneratedContent(_cleanMapKeys(response.content)),
+      rawContent: rawContent,
+      transcriptEntries: transcript.entries,
+    );
+  }
+
+  Map<String?, Object?> _parseJson(String json) {
+    try {
+      final decoded = (json.isNotEmpty)
+          ? Map<String, dynamic>.from(
+              const JsonDecoder().convert(json) as Map,
+            )
+          : <String, dynamic>{};
+      return decoded.map((k, v) => MapEntry<String?, Object?>(k, v));
+    } catch (_) {
+      return {};
+    }
   }
 
   /// Streams structured content as it's generated.
@@ -334,7 +380,7 @@ final class LanguageModelSession {
         onSnapshot: (partialContent) {
           if (!controller.isClosed) controller.add(partialContent);
         },
-        onComplete: (finalContent) {
+        onComplete: (finalContent, rawContent, transcriptEntries) {
           if (!controller.isClosed) {
             controller.add(finalContent);
             controller.close();

@@ -57,7 +57,7 @@ class _MyWeatherState extends State<MyWeather> {
       );
 
       setState(() {
-        _llmResponse = response;
+        _llmResponse = response.content;
       });
     } finally {
       setState(() {

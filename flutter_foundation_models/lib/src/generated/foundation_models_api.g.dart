@@ -44,6 +44,20 @@ enum ModelGuardrailsType {
   permissiveContentTransformations,
 }
 
+/// Generation error types matching Swift's LanguageModelSession.GenerationError
+enum GenerationErrorType {
+  exceededContextWindowSize,
+  assetsUnavailable,
+  guardrailViolation,
+  unsupportedGuide,
+  unsupportedLanguageOrLocale,
+  decodingFailure,
+  rateLimited,
+  concurrentRequests,
+  refusal,
+  unknown,
+}
+
 class ToolDefinitionMessage {
   ToolDefinitionMessage({
     required this.name,
@@ -229,6 +243,102 @@ class ModelAvailabilityMessage {
   }
 }
 
+/// Generation error with type and context
+class GenerationErrorMessage {
+  GenerationErrorMessage({
+    required this.type,
+    required this.message,
+    this.debugDescription,
+  });
+
+  GenerationErrorType type;
+
+  String message;
+
+  String? debugDescription;
+
+  Object encode() {
+    return <Object?>[
+      type,
+      message,
+      debugDescription,
+    ];
+  }
+
+  static GenerationErrorMessage decode(Object result) {
+    result as List<Object?>;
+    return GenerationErrorMessage(
+      type: result[0]! as GenerationErrorType,
+      message: result[1]! as String,
+      debugDescription: result[2] as String?,
+    );
+  }
+}
+
+/// Response from text generation
+class TextResponseMessage {
+  TextResponseMessage({
+    required this.content,
+    required this.transcriptJson,
+  });
+
+  /// The generated text content
+  String content;
+
+  /// JSON-encoded transcript entries from this response
+  String transcriptJson;
+
+  Object encode() {
+    return <Object?>[
+      content,
+      transcriptJson,
+    ];
+  }
+
+  static TextResponseMessage decode(Object result) {
+    result as List<Object?>;
+    return TextResponseMessage(
+      content: result[0]! as String,
+      transcriptJson: result[1]! as String,
+    );
+  }
+}
+
+/// Response from structured generation
+class StructuredResponseMessage {
+  StructuredResponseMessage({
+    required this.content,
+    required this.rawContent,
+    required this.transcriptJson,
+  });
+
+  /// The generated content as JSON map
+  Map<String?, Object?> content;
+
+  /// The raw GeneratedContent as JSON string
+  String rawContent;
+
+  /// JSON-encoded transcript entries from this response
+  String transcriptJson;
+
+  Object encode() {
+    return <Object?>[
+      content,
+      rawContent,
+      transcriptJson,
+    ];
+  }
+
+  static StructuredResponseMessage decode(Object result) {
+    result as List<Object?>;
+    return StructuredResponseMessage(
+      content: (result[0] as Map<Object?, Object?>?)!.cast<String?, Object?>(),
+      rawContent: result[1]! as String,
+      transcriptJson: result[2]! as String,
+    );
+  }
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -246,23 +356,35 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is ModelGuardrailsType) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is ToolDefinitionMessage) {
+    }    else if (value is GenerationErrorType) {
       buffer.putUint8(132);
-      writeValue(buffer, value.encode());
-    }    else if (value is SamplingModeMessage) {
+      writeValue(buffer, value.index);
+    }    else if (value is ToolDefinitionMessage) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    }    else if (value is GenerationOptionsMessage) {
+    }    else if (value is SamplingModeMessage) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    }    else if (value is ModelConfigurationMessage) {
+    }    else if (value is GenerationOptionsMessage) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    }    else if (value is AdapterMessage) {
+    }    else if (value is ModelConfigurationMessage) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    }    else if (value is ModelAvailabilityMessage) {
+    }    else if (value is AdapterMessage) {
       buffer.putUint8(137);
+      writeValue(buffer, value.encode());
+    }    else if (value is ModelAvailabilityMessage) {
+      buffer.putUint8(138);
+      writeValue(buffer, value.encode());
+    }    else if (value is GenerationErrorMessage) {
+      buffer.putUint8(139);
+      writeValue(buffer, value.encode());
+    }    else if (value is TextResponseMessage) {
+      buffer.putUint8(140);
+      writeValue(buffer, value.encode());
+    }    else if (value is StructuredResponseMessage) {
+      buffer.putUint8(141);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -282,17 +404,26 @@ class _PigeonCodec extends StandardMessageCodec {
         final int? value = readValue(buffer) as int?;
         return value == null ? null : ModelGuardrailsType.values[value];
       case 132: 
-        return ToolDefinitionMessage.decode(readValue(buffer)!);
+        final int? value = readValue(buffer) as int?;
+        return value == null ? null : GenerationErrorType.values[value];
       case 133: 
-        return SamplingModeMessage.decode(readValue(buffer)!);
+        return ToolDefinitionMessage.decode(readValue(buffer)!);
       case 134: 
-        return GenerationOptionsMessage.decode(readValue(buffer)!);
+        return SamplingModeMessage.decode(readValue(buffer)!);
       case 135: 
-        return ModelConfigurationMessage.decode(readValue(buffer)!);
+        return GenerationOptionsMessage.decode(readValue(buffer)!);
       case 136: 
-        return AdapterMessage.decode(readValue(buffer)!);
+        return ModelConfigurationMessage.decode(readValue(buffer)!);
       case 137: 
+        return AdapterMessage.decode(readValue(buffer)!);
+      case 138: 
         return ModelAvailabilityMessage.decode(readValue(buffer)!);
+      case 139: 
+        return GenerationErrorMessage.decode(readValue(buffer)!);
+      case 140: 
+        return TextResponseMessage.decode(readValue(buffer)!);
+      case 141: 
+        return StructuredResponseMessage.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -630,7 +761,7 @@ class FoundationModelsHostApi {
     }
   }
 
-  Future<String> respondTo(String sessionId, String prompt, GenerationOptionsMessage? options) async {
+  Future<TextResponseMessage> respondTo(String sessionId, String prompt, GenerationOptionsMessage? options) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondTo$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -653,7 +784,7 @@ class FoundationModelsHostApi {
         message: 'Host platform returned null value for non-null return value.',
       );
     } else {
-      return (pigeonVar_replyList[0] as String?)!;
+      return (pigeonVar_replyList[0] as TextResponseMessage?)!;
     }
   }
 
@@ -687,7 +818,7 @@ class FoundationModelsHostApi {
     }
   }
 
-  Future<Map<String?, Object?>> respondToWithSchema(String sessionId, String prompt, Map<String?, Object?> schema, bool includeSchemaInPrompt, GenerationOptionsMessage? options) async {
+  Future<StructuredResponseMessage> respondToWithSchema(String sessionId, String prompt, Map<String?, Object?> schema, bool includeSchemaInPrompt, GenerationOptionsMessage? options) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.respondToWithSchema$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -710,7 +841,7 @@ class FoundationModelsHostApi {
         message: 'Host platform returned null value for non-null return value.',
       );
     } else {
-      return (pigeonVar_replyList[0] as Map<Object?, Object?>?)!.cast<String?, Object?>();
+      return (pigeonVar_replyList[0] as StructuredResponseMessage?)!;
     }
   }
 
@@ -777,13 +908,13 @@ abstract class FoundationModelsFlutterApi {
   void onTextStreamUpdate(String streamId, String text);
 
   /// Called when text streaming completes successfully.
-  void onTextStreamComplete(String streamId, String finalText);
+  void onTextStreamComplete(String streamId, String finalText, String transcriptJson);
 
   /// Called when a new snapshot is available during streaming.
   void onStreamSnapshot(String streamId, Map<String?, Object?> partialContent);
 
   /// Called when streaming completes successfully.
-  void onStreamComplete(String streamId, Map<String?, Object?> finalContent);
+  void onStreamComplete(String streamId, Map<String?, Object?> finalContent, String rawContent, String transcriptJson);
 
   /// Called when streaming fails.
   void onStreamError(String streamId, String errorCode, String errorMessage);
@@ -866,8 +997,11 @@ abstract class FoundationModelsFlutterApi {
           final String? arg_finalText = (args[1] as String?);
           assert(arg_finalText != null,
               'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete was null, expected non-null String.');
+          final String? arg_transcriptJson = (args[2] as String?);
+          assert(arg_transcriptJson != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete was null, expected non-null String.');
           try {
-            api.onTextStreamComplete(arg_streamId!, arg_finalText!);
+            api.onTextStreamComplete(arg_streamId!, arg_finalText!, arg_transcriptJson!);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);
@@ -922,8 +1056,14 @@ abstract class FoundationModelsFlutterApi {
           final Map<String?, Object?>? arg_finalContent = (args[1] as Map<Object?, Object?>?)?.cast<String?, Object?>();
           assert(arg_finalContent != null,
               'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete was null, expected non-null Map<String?, Object?>.');
+          final String? arg_rawContent = (args[2] as String?);
+          assert(arg_rawContent != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete was null, expected non-null String.');
+          final String? arg_transcriptJson = (args[3] as String?);
+          assert(arg_transcriptJson != null,
+              'Argument for dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete was null, expected non-null String.');
           try {
-            api.onStreamComplete(arg_streamId!, arg_finalContent!);
+            api.onStreamComplete(arg_streamId!, arg_finalContent!, arg_rawContent!, arg_transcriptJson!);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

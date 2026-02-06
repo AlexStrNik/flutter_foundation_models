@@ -97,6 +97,65 @@ class ModelAvailabilityMessage {
   final String? unavailableReason;
 }
 
+/// Generation error types matching Swift's LanguageModelSession.GenerationError
+enum GenerationErrorType {
+  exceededContextWindowSize,
+  assetsUnavailable,
+  guardrailViolation,
+  unsupportedGuide,
+  unsupportedLanguageOrLocale,
+  decodingFailure,
+  rateLimited,
+  concurrentRequests,
+  refusal,
+  unknown,
+}
+
+/// Generation error with type and context
+class GenerationErrorMessage {
+  GenerationErrorMessage({
+    required this.type,
+    required this.message,
+    this.debugDescription,
+  });
+
+  final GenerationErrorType type;
+  final String message;
+  final String? debugDescription;
+}
+
+/// Response from text generation
+class TextResponseMessage {
+  TextResponseMessage({
+    required this.content,
+    required this.transcriptJson,
+  });
+
+  /// The generated text content
+  final String content;
+
+  /// JSON-encoded transcript entries from this response
+  final String transcriptJson;
+}
+
+/// Response from structured generation
+class StructuredResponseMessage {
+  StructuredResponseMessage({
+    required this.content,
+    required this.rawContent,
+    required this.transcriptJson,
+  });
+
+  /// The generated content as JSON map
+  final Map<String?, Object?> content;
+
+  /// The raw GeneratedContent as JSON string
+  final String rawContent;
+
+  /// JSON-encoded transcript entries from this response
+  final String transcriptJson;
+}
+
 @HostApi()
 abstract class FoundationModelsHostApi {
   /// Checks if Foundation Models API is available on this device.
@@ -156,7 +215,7 @@ abstract class FoundationModelsHostApi {
   void prewarmSession(String sessionId, String? promptPrefix);
 
   @async
-  String respondTo(
+  TextResponseMessage respondTo(
     String sessionId,
     String prompt,
     GenerationOptionsMessage? options,
@@ -173,7 +232,7 @@ abstract class FoundationModelsHostApi {
   );
 
   @async
-  Map<String?, Object?> respondToWithSchema(
+  StructuredResponseMessage respondToWithSchema(
     String sessionId,
     String prompt,
     Map<String?, Object?> schema,
@@ -217,6 +276,7 @@ abstract class FoundationModelsFlutterApi {
   void onTextStreamComplete(
     String streamId,
     String finalText,
+    String transcriptJson,
   );
 
   /// Called when a new snapshot is available during streaming.
@@ -229,6 +289,8 @@ abstract class FoundationModelsFlutterApi {
   void onStreamComplete(
     String streamId,
     Map<String?, Object?> finalContent,
+    String rawContent,
+    String transcriptJson,
   );
 
   /// Called when streaming fails.

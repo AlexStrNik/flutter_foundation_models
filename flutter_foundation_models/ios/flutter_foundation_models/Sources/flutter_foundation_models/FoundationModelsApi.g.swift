@@ -87,6 +87,20 @@ enum ModelGuardrailsType: Int {
   case permissiveContentTransformations = 1
 }
 
+/// Generation error types matching Swift's LanguageModelSession.GenerationError
+enum GenerationErrorType: Int {
+  case exceededContextWindowSize = 0
+  case assetsUnavailable = 1
+  case guardrailViolation = 2
+  case unsupportedGuide = 3
+  case unsupportedLanguageOrLocale = 4
+  case decodingFailure = 5
+  case rateLimited = 6
+  case concurrentRequests = 7
+  case refusal = 8
+  case unknown = 9
+}
+
 /// Generated class from Pigeon that represents data sent in messages.
 struct ToolDefinitionMessage {
   var name: String
@@ -258,6 +272,97 @@ struct ModelAvailabilityMessage {
   }
 }
 
+/// Generation error with type and context
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct GenerationErrorMessage {
+  var type: GenerationErrorType
+  var message: String
+  var debugDescription: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> GenerationErrorMessage? {
+    let type = pigeonVar_list[0] as! GenerationErrorType
+    let message = pigeonVar_list[1] as! String
+    let debugDescription: String? = nilOrValue(pigeonVar_list[2])
+
+    return GenerationErrorMessage(
+      type: type,
+      message: message,
+      debugDescription: debugDescription
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      type,
+      message,
+      debugDescription,
+    ]
+  }
+}
+
+/// Response from text generation
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct TextResponseMessage {
+  /// The generated text content
+  var content: String
+  /// JSON-encoded transcript entries from this response
+  var transcriptJson: String
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> TextResponseMessage? {
+    let content = pigeonVar_list[0] as! String
+    let transcriptJson = pigeonVar_list[1] as! String
+
+    return TextResponseMessage(
+      content: content,
+      transcriptJson: transcriptJson
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      content,
+      transcriptJson,
+    ]
+  }
+}
+
+/// Response from structured generation
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct StructuredResponseMessage {
+  /// The generated content as JSON map
+  var content: [String?: Any?]
+  /// The raw GeneratedContent as JSON string
+  var rawContent: String
+  /// JSON-encoded transcript entries from this response
+  var transcriptJson: String
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> StructuredResponseMessage? {
+    let content = pigeonVar_list[0] as! [String?: Any?]
+    let rawContent = pigeonVar_list[1] as! String
+    let transcriptJson = pigeonVar_list[2] as! String
+
+    return StructuredResponseMessage(
+      content: content,
+      rawContent: rawContent,
+      transcriptJson: transcriptJson
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      content,
+      rawContent,
+      transcriptJson,
+    ]
+  }
+}
+
 private class FoundationModelsApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -280,17 +385,29 @@ private class FoundationModelsApiPigeonCodecReader: FlutterStandardReader {
       }
       return nil
     case 132:
-      return ToolDefinitionMessage.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return GenerationErrorType(rawValue: enumResultAsInt)
+      }
+      return nil
     case 133:
-      return SamplingModeMessage.fromList(self.readValue() as! [Any?])
+      return ToolDefinitionMessage.fromList(self.readValue() as! [Any?])
     case 134:
-      return GenerationOptionsMessage.fromList(self.readValue() as! [Any?])
+      return SamplingModeMessage.fromList(self.readValue() as! [Any?])
     case 135:
-      return ModelConfigurationMessage.fromList(self.readValue() as! [Any?])
+      return GenerationOptionsMessage.fromList(self.readValue() as! [Any?])
     case 136:
-      return AdapterMessage.fromList(self.readValue() as! [Any?])
+      return ModelConfigurationMessage.fromList(self.readValue() as! [Any?])
     case 137:
+      return AdapterMessage.fromList(self.readValue() as! [Any?])
+    case 138:
       return ModelAvailabilityMessage.fromList(self.readValue() as! [Any?])
+    case 139:
+      return GenerationErrorMessage.fromList(self.readValue() as! [Any?])
+    case 140:
+      return TextResponseMessage.fromList(self.readValue() as! [Any?])
+    case 141:
+      return StructuredResponseMessage.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -308,23 +425,35 @@ private class FoundationModelsApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? ModelGuardrailsType {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? ToolDefinitionMessage {
+    } else if let value = value as? GenerationErrorType {
       super.writeByte(132)
-      super.writeValue(value.toList())
-    } else if let value = value as? SamplingModeMessage {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? ToolDefinitionMessage {
       super.writeByte(133)
       super.writeValue(value.toList())
-    } else if let value = value as? GenerationOptionsMessage {
+    } else if let value = value as? SamplingModeMessage {
       super.writeByte(134)
       super.writeValue(value.toList())
-    } else if let value = value as? ModelConfigurationMessage {
+    } else if let value = value as? GenerationOptionsMessage {
       super.writeByte(135)
       super.writeValue(value.toList())
-    } else if let value = value as? AdapterMessage {
+    } else if let value = value as? ModelConfigurationMessage {
       super.writeByte(136)
       super.writeValue(value.toList())
-    } else if let value = value as? ModelAvailabilityMessage {
+    } else if let value = value as? AdapterMessage {
       super.writeByte(137)
+      super.writeValue(value.toList())
+    } else if let value = value as? ModelAvailabilityMessage {
+      super.writeByte(138)
+      super.writeValue(value.toList())
+    } else if let value = value as? GenerationErrorMessage {
+      super.writeByte(139)
+      super.writeValue(value.toList())
+    } else if let value = value as? TextResponseMessage {
+      super.writeByte(140)
+      super.writeValue(value.toList())
+    } else if let value = value as? StructuredResponseMessage {
+      super.writeByte(141)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -375,12 +504,12 @@ protocol FoundationModelsHostApi {
   func isSessionResponding(sessionId: String, completion: @escaping (Result<Bool, Error>) -> Void)
   /// Prewarms the session with an optional prompt prefix.
   func prewarmSession(sessionId: String, promptPrefix: String?, completion: @escaping (Result<Void, Error>) -> Void)
-  func respondTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
+  func respondTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<TextResponseMessage, Error>) -> Void)
   /// Starts a text streaming response. Returns a stream ID.
   /// Updates will be sent via FlutterApi.onTextStreamUpdate.
   /// Completion will be sent via FlutterApi.onTextStreamComplete.
   func streamResponseTo(sessionId: String, prompt: String, options: GenerationOptionsMessage?, completion: @escaping (Result<String, Error>) -> Void)
-  func respondToWithSchema(sessionId: String, prompt: String, schema: [String?: Any?], includeSchemaInPrompt: Bool, options: GenerationOptionsMessage?, completion: @escaping (Result<[String?: Any?], Error>) -> Void)
+  func respondToWithSchema(sessionId: String, prompt: String, schema: [String?: Any?], includeSchemaInPrompt: Bool, options: GenerationOptionsMessage?, completion: @escaping (Result<StructuredResponseMessage, Error>) -> Void)
   /// Starts a streaming response. Returns a stream ID.
   /// Snapshots will be sent via FlutterApi.onStreamSnapshot.
   /// Completion/error will be sent via FlutterApi.onStreamComplete/onStreamError.
@@ -723,11 +852,11 @@ protocol FoundationModelsFlutterApiProtocol {
   /// Called when new text is available during text streaming.
   func onTextStreamUpdate(streamId streamIdArg: String, text textArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
   /// Called when text streaming completes successfully.
-  func onTextStreamComplete(streamId streamIdArg: String, finalText finalTextArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onTextStreamComplete(streamId streamIdArg: String, finalText finalTextArg: String, transcriptJson transcriptJsonArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
   /// Called when a new snapshot is available during streaming.
   func onStreamSnapshot(streamId streamIdArg: String, partialContent partialContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void)
   /// Called when streaming completes successfully.
-  func onStreamComplete(streamId streamIdArg: String, finalContent finalContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void)
+  func onStreamComplete(streamId streamIdArg: String, finalContent finalContentArg: [String?: Any?], rawContent rawContentArg: String, transcriptJson transcriptJsonArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
   /// Called when streaming fails.
   func onStreamError(streamId streamIdArg: String, errorCode errorCodeArg: String, errorMessage errorMessageArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void)
 }
@@ -782,10 +911,10 @@ class FoundationModelsFlutterApi: FoundationModelsFlutterApiProtocol {
     }
   }
   /// Called when text streaming completes successfully.
-  func onTextStreamComplete(streamId streamIdArg: String, finalText finalTextArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
+  func onTextStreamComplete(streamId streamIdArg: String, finalText finalTextArg: String, transcriptJson transcriptJsonArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
     let channelName: String = "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onTextStreamComplete\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
-    channel.sendMessage([streamIdArg, finalTextArg] as [Any?]) { response in
+    channel.sendMessage([streamIdArg, finalTextArg, transcriptJsonArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {
         completion(.failure(createConnectionError(withChannelName: channelName)))
         return
@@ -820,10 +949,10 @@ class FoundationModelsFlutterApi: FoundationModelsFlutterApiProtocol {
     }
   }
   /// Called when streaming completes successfully.
-  func onStreamComplete(streamId streamIdArg: String, finalContent finalContentArg: [String?: Any?], completion: @escaping (Result<Void, PigeonError>) -> Void) {
+  func onStreamComplete(streamId streamIdArg: String, finalContent finalContentArg: [String?: Any?], rawContent rawContentArg: String, transcriptJson transcriptJsonArg: String, completion: @escaping (Result<Void, PigeonError>) -> Void) {
     let channelName: String = "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsFlutterApi.onStreamComplete\(messageChannelSuffix)"
     let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
-    channel.sendMessage([streamIdArg, finalContentArg] as [Any?]) { response in
+    channel.sendMessage([streamIdArg, finalContentArg, rawContentArg, transcriptJsonArg] as [Any?]) { response in
       guard let listResponse = response as? [Any?] else {
         completion(.failure(createConnectionError(withChannelName: channelName)))
         return

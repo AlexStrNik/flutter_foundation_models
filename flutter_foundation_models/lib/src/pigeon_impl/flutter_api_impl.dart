@@ -1,16 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 import 'package:flutter_foundation_models/src/generated/foundation_models_api.g.dart';
 
 /// Callback types for structured streaming
 typedef StreamSnapshotCallback = void Function(GeneratedContent partialContent);
-typedef StreamCompleteCallback = void Function(GeneratedContent finalContent);
+typedef StreamCompleteCallback = void Function(
+  GeneratedContent finalContent,
+  GeneratedContent rawContent,
+  List<TranscriptEntry> transcriptEntries,
+);
 typedef StreamErrorCallback = void Function(String errorCode, String errorMessage);
 
 /// Callback types for text streaming
 typedef TextStreamUpdateCallback = void Function(String text);
-typedef TextStreamCompleteCallback = void Function(String finalText);
+typedef TextStreamCompleteCallback = void Function(
+  String finalText,
+  List<TranscriptEntry> transcriptEntries,
+);
 
 /// Holds callbacks for an active structured stream
 class _StreamCallbacks {
@@ -126,10 +134,11 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
   }
 
   @override
-  void onTextStreamComplete(String streamId, String finalText) {
+  void onTextStreamComplete(String streamId, String finalText, String transcriptJson) {
     final callbacks = _textStreamCallbacks[streamId];
     if (callbacks != null) {
-      callbacks.onComplete(finalText);
+      final transcript = Transcript.fromJson(transcriptJson);
+      callbacks.onComplete(finalText, transcript.entries);
       _textStreamCallbacks.remove(streamId);
     }
   }
@@ -144,12 +153,35 @@ class FlutterApiImpl implements FoundationModelsFlutterApi {
   }
 
   @override
-  void onStreamComplete(String streamId, Map<String?, Object?> finalContent) {
+  void onStreamComplete(
+    String streamId,
+    Map<String?, Object?> finalContent,
+    String rawContent,
+    String transcriptJson,
+  ) {
     final callbacks = _streamCallbacks[streamId];
     if (callbacks != null) {
       final cleanedContent = _cleanMapKeys(finalContent);
-      callbacks.onComplete(GeneratedContent(cleanedContent));
+      final cleanedRawContent = _parseJsonString(rawContent);
+      final transcript = Transcript.fromJson(transcriptJson);
+      callbacks.onComplete(
+        GeneratedContent(cleanedContent),
+        GeneratedContent(cleanedRawContent),
+        transcript.entries,
+      );
       _streamCallbacks.remove(streamId);
+    }
+  }
+
+  Map<String, dynamic> _parseJsonString(String json) {
+    try {
+      if (json.isEmpty) return {};
+      final decoded = Map<String, dynamic>.from(
+        const JsonDecoder().convert(json) as Map,
+      );
+      return decoded;
+    } catch (_) {
+      return {};
     }
   }
 
