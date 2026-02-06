@@ -25,7 +25,39 @@
 ///   print(partial.name ?? "Loading..."); // Fields may be null
 /// });
 /// ```
-extension type GeneratedContent(dynamic value) {}
+extension type GeneratedContent(dynamic value) {
+  /// Converts array content to a typed List.
+  ///
+  /// Use with [GenerationSchema.array] to generate and parse lists:
+  ///
+  /// ```dart
+  /// final schema = GenerationSchema.array($MovieGenerable.generationSchema);
+  /// final response = await session.respondToWithSchema(prompt, schema: schema);
+  /// final movies = response.content.toList($MovieGenerable.fromGeneratedContent);
+  /// ```
+  List<T> toList<T>(T Function(GeneratedContent) fromContent) {
+    final list = value as List? ?? [];
+    return list.map((e) => fromContent(GeneratedContent(e))).toList();
+  }
+
+  /// Converts partial array content to a typed List during streaming.
+  ///
+  /// Items may be incomplete during streaming, so the converter should
+  /// handle partial data (use `fromPartialGeneratedContent`).
+  ///
+  /// ```dart
+  /// stream.listen((partial) {
+  ///   final movies = partial.toPartialList($MovieGenerable.fromPartialGeneratedContent);
+  ///   for (final movie in movies) {
+  ///     print(movie?.title ?? "Loading...");
+  ///   }
+  /// });
+  /// ```
+  List<T> toPartialList<T>(T Function(GeneratedContent) fromPartialContent) {
+    final list = value as List? ?? [];
+    return list.map((e) => fromPartialContent(GeneratedContent(e))).toList();
+  }
+}
 
 /// Interface for types that can be converted to [GeneratedContent].
 ///

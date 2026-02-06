@@ -42,12 +42,31 @@
 /// Then generate structured content:
 ///
 /// ```dart
-/// final content = await session.respondToWithSchema(
+/// final response = await session.respondToWithSchema(
 ///   "Recommend a sci-fi movie",
 ///   schema: $MovieRecommendationGenerable.generationSchema,
 /// );
-/// final movie = $MovieRecommendationGenerable.fromGeneratedContent(content);
+/// final movie = $MovieRecommendationGenerable.fromGeneratedContent(response.content);
 /// print('${movie.title} (${movie.year})');
+/// ```
+///
+/// ## Generating Lists
+///
+/// Generate multiple items using `GenerationSchema.array`:
+///
+/// ```dart
+/// final response = await session.respondToWithSchema(
+///   "Recommend 3 sci-fi movies",
+///   schema: GenerationSchema.array(
+///     $MovieRecommendationGenerable.generationSchema,
+///     minimumElements: 3,
+///     maximumElements: 3,
+///   ),
+/// );
+/// final movies = response.content.toList($MovieRecommendationGenerable.fromGeneratedContent);
+/// for (final movie in movies) {
+///   print('${movie.title} (${movie.year})');
+/// }
 /// ```
 ///
 /// ## Streaming

@@ -30,6 +30,39 @@ final class GenerationSchema {
     required this.dependencies,
   });
 
+  /// Creates an array schema that generates a list of items.
+  ///
+  /// Use this to generate `List<T>` where T is a @Generable type:
+  ///
+  /// ```dart
+  /// final schema = GenerationSchema.array(
+  ///   $MovieGenerable.generationSchema,
+  ///   minimumElements: 3,
+  ///   maximumElements: 5,
+  /// );
+  ///
+  /// final response = await session.respondToWithSchema(
+  ///   "Generate 3-5 movie recommendations",
+  ///   schema: schema,
+  /// );
+  ///
+  /// final movies = response.content.toList($MovieGenerable.fromGeneratedContent);
+  /// ```
+  factory GenerationSchema.array(
+    GenerationSchema itemSchema, {
+    int? minimumElements,
+    int? maximumElements,
+  }) {
+    return GenerationSchema(
+      root: ArrayGenerationSchema(
+        arrayOf: itemSchema.root,
+        minimumElements: minimumElements,
+        maximumElements: maximumElements,
+      ),
+      dependencies: itemSchema.dependencies,
+    );
+  }
+
   /// Converts this schema to JSON for the native API.
   Map<String, dynamic> toJson() => {
         "root": root.toJson(),
