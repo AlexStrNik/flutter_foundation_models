@@ -1,5 +1,7 @@
 # Flutter Foundation Models
 
+[![pub package](https://img.shields.io/pub/v/flutter_foundation_models.svg)](https://pub.dev/packages/flutter_foundation_models)
+
 A Flutter plugin for Apple's on-device Foundation Models, available on iOS 26+ and macOS 26+.
 
 ## Features

@@ -1,5 +1,7 @@
 # Flutter Foundation Models
 
+[![pub package](https://img.shields.io/pub/v/flutter_foundation_models.svg)](https://pub.dev/packages/flutter_foundation_models)
+
 A Flutter plugin for Apple's on-device Foundation Models framework. Provides text generation, structured output, streaming, and tool use capabilities.
 
 ## Packages
@@ -16,13 +18,13 @@ A Flutter plugin for Apple's on-device Foundation Models framework. Provides tex
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 
 // Check availability first
-if (!await LanguageModelSession.isAvailable()) {
+if (!await SystemLanguageModel.isAvailable) {
   print('Foundation Models not available');
   return;
 }
 
 // Simple text generation
-final session = LanguageModelSession();
+final session = await LanguageModelSession.create();
 final response = await session.respondTo("What is Flutter?");
 
 // Structured output
@@ -39,6 +41,9 @@ final content = await session.respondToWithSchema(
   schema: $MovieGenerable.generationSchema,
 );
 final movie = $MovieGenerable.fromGeneratedContent(content);
+
+// Don't forget to dispose
+session.dispose();
 ```
 
 See the [main package README](flutter_foundation_models/README.md) for full documentation.
@@ -56,7 +61,7 @@ Check out the [example app](flutter_foundation_models/example/) for a complete d
 - Flutter 3.22+
 - Xcode 26+ (for iOS 26 SDK)
 
-Use `LanguageModelSession.isAvailable()` to check API availability at runtime.
+Use `SystemLanguageModel.isAvailable` to check API availability at runtime.
 
 ## License
 
