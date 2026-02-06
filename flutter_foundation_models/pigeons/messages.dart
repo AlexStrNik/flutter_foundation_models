@@ -132,8 +132,20 @@ abstract class FoundationModelsHostApi {
     String? instructions,
   );
 
+  /// Creates a session with an existing transcript (JSON encoded).
+  @async
+  String createSessionWithTranscript(
+    String modelId,
+    List<ToolDefinitionMessage> tools,
+    String transcriptJson,
+  );
+
   @async
   void destroySession(String sessionId);
+
+  /// Gets the transcript from a session as JSON.
+  @async
+  String getSessionTranscript(String sessionId);
 
   /// Returns whether the session is currently responding.
   @async

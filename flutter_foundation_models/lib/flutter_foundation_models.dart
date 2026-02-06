@@ -98,5 +98,6 @@ export 'src/generation_schema.dart';
 export 'src/language_model_session.dart';
 export 'src/system_language_model.dart';
 export 'src/tool.dart';
+export 'src/transcript.dart';
 
 export 'package:flutter_foundation_models_annotations/flutter_foundation_models_annotations.dart';

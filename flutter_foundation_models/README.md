@@ -369,6 +369,33 @@ model.dispose();
 adapter.dispose();
 ```
 
+### Transcripts
+
+Access and persist conversation history:
+
+```dart
+final session = await LanguageModelSession.create();
+
+// Have a conversation
+await session.respondTo("Hello!");
+await session.respondTo("What's 2+2?");
+
+// Get the transcript
+final transcript = await session.transcript;
+print('Conversation has ${transcript.length} entries');
+
+// Serialize for storage
+final json = transcript.toJson();
+// Store json to disk, database, etc.
+
+// Later, restore and continue the conversation
+final restored = Transcript.fromJson(json);
+final newSession = await LanguageModelSession.createWithTranscript(
+  transcript: restored,
+);
+await newSession.respondTo("What did we talk about?");
+```
+
 ### Session Optimization
 
 Reduce latency with prewarming:

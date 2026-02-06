@@ -71,6 +71,43 @@ final class LanguageModelSession {
     return LanguageModelSession._(sessionId, effectiveModel, tools);
   }
 
+  /// Creates a new language model session with an existing transcript.
+  ///
+  /// Use this to continue a previous conversation.
+  ///
+  /// [model] - The language model to use. Defaults to [SystemLanguageModel.defaultModel].
+  /// [tools] - Optional list of tools the model can use.
+  /// [transcript] - The transcript to continue from.
+  static Future<LanguageModelSession> createWithTranscript({
+    SystemLanguageModel? model,
+    List<Tool> tools = const [],
+    required Transcript transcript,
+  }) async {
+    if (!_flutterApiSetUp) {
+      FoundationModelsFlutterApi.setUp(_flutterApiImpl);
+      _flutterApiSetUp = true;
+    }
+
+    final effectiveModel = model ?? SystemLanguageModel.defaultModel;
+
+    final toolMessages = tools.map((tool) {
+      return ToolDefinitionMessage(
+        name: tool.name,
+        description: tool.description,
+        parameters: _convertToNullableKeys(tool.parameters.toJson()),
+      );
+    }).toList();
+
+    final sessionId = await _hostApi.createSessionWithTranscript(
+      effectiveModel.modelId,
+      toolMessages,
+      transcript.toJson(),
+    );
+
+    _flutterApiImpl.registerSession(sessionId, tools);
+    return LanguageModelSession._(sessionId, effectiveModel, tools);
+  }
+
   static Map<String?, Object?> _convertToNullableKeys(Map<String, dynamic> map) {
     final result = <String?, Object?>{};
     for (final entry in map.entries) {
@@ -99,6 +136,18 @@ final class LanguageModelSession {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Gets the current transcript of this session.
+  ///
+  /// The transcript contains the full conversation history including
+  /// prompts, responses, tool calls, and tool outputs.
+  Future<Transcript> get transcript async {
+    if (_isDisposed) {
+      throw Exception('Cannot get transcript from a disposed LanguageModelSession');
+    }
+    final jsonString = await _hostApi.getSessionTranscript(_sessionId);
+    return Transcript.fromJson(jsonString);
   }
 
   /// Prewarms the session to reduce latency on the first request.

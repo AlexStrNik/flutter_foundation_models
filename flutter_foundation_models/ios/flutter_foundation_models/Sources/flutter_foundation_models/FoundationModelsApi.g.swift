@@ -366,7 +366,11 @@ protocol FoundationModelsHostApi {
   func destroyModel(modelId: String, completion: @escaping (Result<Void, Error>) -> Void)
   /// Creates a session with the given model ID.
   func createSession(modelId: String, tools: [ToolDefinitionMessage], instructions: String?, completion: @escaping (Result<String, Error>) -> Void)
+  /// Creates a session with an existing transcript (JSON encoded).
+  func createSessionWithTranscript(modelId: String, tools: [ToolDefinitionMessage], transcriptJson: String, completion: @escaping (Result<String, Error>) -> Void)
   func destroySession(sessionId: String, completion: @escaping (Result<Void, Error>) -> Void)
+  /// Gets the transcript from a session as JSON.
+  func getSessionTranscript(sessionId: String, completion: @escaping (Result<String, Error>) -> Void)
   /// Returns whether the session is currently responding.
   func isSessionResponding(sessionId: String, completion: @escaping (Result<Bool, Error>) -> Void)
   /// Prewarms the session with an optional prompt prefix.
@@ -515,6 +519,26 @@ class FoundationModelsHostApiSetup {
     } else {
       createSessionChannel.setMessageHandler(nil)
     }
+    /// Creates a session with an existing transcript (JSON encoded).
+    let createSessionWithTranscriptChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.createSessionWithTranscript\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      createSessionWithTranscriptChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let modelIdArg = args[0] as! String
+        let toolsArg = args[1] as! [ToolDefinitionMessage]
+        let transcriptJsonArg = args[2] as! String
+        api.createSessionWithTranscript(modelId: modelIdArg, tools: toolsArg, transcriptJson: transcriptJsonArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      createSessionWithTranscriptChannel.setMessageHandler(nil)
+    }
     let destroySessionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.destroySession\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       destroySessionChannel.setMessageHandler { message, reply in
@@ -531,6 +555,24 @@ class FoundationModelsHostApiSetup {
       }
     } else {
       destroySessionChannel.setMessageHandler(nil)
+    }
+    /// Gets the transcript from a session as JSON.
+    let getSessionTranscriptChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.getSessionTranscript\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      getSessionTranscriptChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let sessionIdArg = args[0] as! String
+        api.getSessionTranscript(sessionId: sessionIdArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      getSessionTranscriptChannel.setMessageHandler(nil)
     }
     /// Returns whether the session is currently responding.
     let isSessionRespondingChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.flutter_foundation_models.FoundationModelsHostApi.isSessionResponding\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

@@ -35,6 +35,73 @@ final class GenerationSchema {
         "root": root.toJson(),
         "dependencies": dependencies.map((e) => e.toJson()).toList(),
       };
+
+  /// Creates a schema from JSON.
+  factory GenerationSchema.fromJson(Map<String, dynamic> json) {
+    return GenerationSchema(
+      root: _dynamicSchemaFromJson(json['root'] as Map<String, dynamic>),
+      dependencies: (json['dependencies'] as List<dynamic>?)
+              ?.map((e) => _dynamicSchemaFromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+
+  static DynamicGenerationSchema _dynamicSchemaFromJson(
+      Map<String, dynamic> json) {
+    final kind = json['kind'] as String;
+    switch (kind) {
+      case 'ValueGenerationSchema':
+        return ValueGenerationSchema(
+          type: json['type'] as String,
+          enumValues: (json['enum'] as List<dynamic>?)?.cast<String>(),
+          pattern: json['pattern'] as String?,
+          minimum: json['minimum'] as num?,
+          maximum: json['maximum'] as num?,
+        );
+      case 'ArrayGenerationSchema':
+        return ArrayGenerationSchema(
+          arrayOf:
+              _dynamicSchemaFromJson(json['arrayOf'] as Map<String, dynamic>),
+          minimumElements: json['minimumElements'] as int?,
+          maximumElements: json['maximumElements'] as int?,
+        );
+      case 'AnyOfGenerationSchema':
+        return AnyOfGenerationSchema(
+          name: json['name'] as String,
+          description: json['description'] as String?,
+          anyOf: (json['anyOf'] as List<dynamic>)
+              .map((e) => _dynamicSchemaFromJson(e as Map<String, dynamic>))
+              .toList(),
+        );
+      case 'AnyOfStringsGenerationSchema':
+        return AnyOfStringsGenerationSchema(
+          name: json['name'] as String,
+          description: json['description'] as String?,
+          anyOf: (json['anyOf'] as List<dynamic>).cast<String>(),
+        );
+      case 'StructGenerationSchema':
+        return StructGenerationSchema(
+          name: json['name'] as String,
+          description: json['description'] as String?,
+          properties: (json['properties'] as List<dynamic>)
+              .map((e) => _propertyFromJson(e as Map<String, dynamic>))
+              .toList(),
+        );
+      default:
+        throw ArgumentError('Unknown schema kind: $kind');
+    }
+  }
+
+  static DynamicGenerationSchemaProperty _propertyFromJson(
+      Map<String, dynamic> json) {
+    return DynamicGenerationSchemaProperty(
+      name: json['name'] as String,
+      description: json['description'] as String?,
+      schema: _dynamicSchemaFromJson(json['schema'] as Map<String, dynamic>),
+      isOptional: json['isOptional'] as bool? ?? false,
+    );
+  }
 }
 
 /// Base class for dynamic generation schema types.

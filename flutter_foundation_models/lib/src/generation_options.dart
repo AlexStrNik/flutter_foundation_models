@@ -1,3 +1,5 @@
+import 'generated/foundation_models_api.g.dart';
+
 /// Sampling mode for text generation.
 ///
 /// Sampling modes control how the model selects the next token during generation.
@@ -113,4 +115,60 @@ class GenerationOptions {
     this.temperature,
     this.maximumResponseTokens,
   });
+}
+
+// Extension for internal Pigeon conversion
+extension GenerationOptionsInternal on GenerationOptions {
+  static GenerationOptions fromMessage(GenerationOptionsMessage msg) {
+    SamplingMode? sampling;
+    if (msg.sampling != null) {
+      switch (msg.sampling!.type) {
+        case SamplingModeType.greedy:
+          sampling = const SamplingMode.greedy();
+        case SamplingModeType.topK:
+          sampling = SamplingMode.topK(
+            msg.sampling!.topK ?? 40,
+            seed: msg.sampling!.seed,
+          );
+        case SamplingModeType.topP:
+          sampling = SamplingMode.topP(
+            msg.sampling!.probabilityThreshold ?? 0.9,
+            seed: msg.sampling!.seed,
+          );
+      }
+    }
+    return GenerationOptions(
+      sampling: sampling,
+      temperature: msg.temperature,
+      maximumResponseTokens: msg.maximumResponseTokens,
+    );
+  }
+
+  GenerationOptionsMessage toMessage() {
+    SamplingModeMessage? samplingMsg;
+    final s = sampling;
+    if (s != null) {
+      switch (s) {
+        case GreedySamplingMode():
+          samplingMsg = SamplingModeMessage(type: SamplingModeType.greedy);
+        case TopKSamplingMode():
+          samplingMsg = SamplingModeMessage(
+            type: SamplingModeType.topK,
+            topK: s.k,
+            seed: s.seed,
+          );
+        case TopPSamplingMode():
+          samplingMsg = SamplingModeMessage(
+            type: SamplingModeType.topP,
+            probabilityThreshold: s.probabilityThreshold,
+            seed: s.seed,
+          );
+      }
+    }
+    return GenerationOptionsMessage(
+      sampling: samplingMsg,
+      temperature: temperature,
+      maximumResponseTokens: maximumResponseTokens,
+    );
+  }
 }

@@ -1,3 +1,14 @@
+## 0.2.2
+
+- **Transcript support** - Access conversation history and continue sessions
+  - `session.transcript` - Get the current conversation transcript
+  - `LanguageModelSession.createWithTranscript()` - Create a session from a previous transcript
+  - `Transcript.toJson()` / `Transcript.fromJson()` - Serialize/deserialize transcripts
+
+## 0.2.1
+
+- Update documentation
+
 ## 0.2.0
 
 ### Breaking Changes

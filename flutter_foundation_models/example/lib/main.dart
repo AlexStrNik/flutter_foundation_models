@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foundation_models_example/my_weather.dart';
 import 'package:flutter_foundation_models_example/novel_generator.dart';
+import 'package:flutter_foundation_models_example/transcript_demo.dart';
 
 void main() {
   runApp(const MyApp());
@@ -19,6 +20,7 @@ class _MyAppState extends State<MyApp> {
   static const List<Widget> _pages = [
     MyWeather(),
     NovelGenerator(),
+    TranscriptDemo(),
   ];
 
   void _onItemTapped(int index) {
@@ -44,6 +46,10 @@ class _MyAppState extends State<MyApp> {
             BottomNavigationBarItem(
               icon: Icon(Icons.book),
               label: 'Novel',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.history),
+              label: 'Transcript',
             ),
           ],
           currentIndex: _selectedIndex,

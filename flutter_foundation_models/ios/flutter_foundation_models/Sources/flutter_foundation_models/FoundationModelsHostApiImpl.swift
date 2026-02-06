@@ -246,6 +246,48 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
         )))
     }
 
+    func createSessionWithTranscript(
+        modelId: String,
+        tools: [ToolDefinitionMessage],
+        transcriptJson: String,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            do {
+                let model = try getModel(modelId)
+                let sessionId = UUID().uuidString
+                let flutterTools = try tools.map { tool -> FlutterTool in
+                    try FlutterTool(
+                        sessionId: sessionId,
+                        toolDefinition: tool,
+                        flutterApi: flutterApi!
+                    )
+                }
+
+                guard let jsonData = transcriptJson.data(using: .utf8) else {
+                    throw PigeonError(code: "INVALID_JSON", message: "Invalid transcript JSON", details: nil)
+                }
+                let nativeTranscript = try JSONDecoder().decode(Transcript.self, from: jsonData)
+                ModelStorage.shared.sessions[sessionId] = LanguageModelSession(model: model, tools: flutterTools, transcript: nativeTranscript)
+                completion(.success(sessionId))
+            } catch {
+                completion(.failure(PigeonError(
+                    code: "CREATE_SESSION_ERROR",
+                    message: error.localizedDescription,
+                    details: nil
+                )))
+            }
+            return
+        }
+        #endif
+        completion(.failure(PigeonError(
+            code: "UNAVAILABLE",
+            message: "Foundation Models API is not available on this device",
+            details: nil
+        )))
+    }
+
     func destroySession(
         sessionId: String,
         completion: @escaping (Result<Void, Error>) -> Void
@@ -263,6 +305,44 @@ class FoundationModelsHostApiImpl: FoundationModelsHostApi {
 
             ModelStorage.shared.sessions.removeValue(forKey: sessionId)
             completion(.success(()))
+            return
+        }
+        #endif
+        completion(.failure(PigeonError(
+            code: "UNAVAILABLE",
+            message: "Foundation Models API is not available on this device",
+            details: nil
+        )))
+    }
+
+    func getSessionTranscript(
+        sessionId: String,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            guard let session = ModelStorage.shared.sessions[sessionId] else {
+                completion(.failure(PigeonError(
+                    code: "SESSION_NOT_FOUND",
+                    message: "Session with id \(sessionId) not found",
+                    details: nil
+                )))
+                return
+            }
+
+            do {
+                let jsonData = try JSONEncoder().encode(session.transcript)
+                guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+                    throw PigeonError(code: "ENCODE_ERROR", message: "Failed to encode transcript", details: nil)
+                }
+                completion(.success(jsonString))
+            } catch {
+                completion(.failure(PigeonError(
+                    code: "TRANSCRIPT_ERROR",
+                    message: error.localizedDescription,
+                    details: nil
+                )))
+            }
             return
         }
         #endif
