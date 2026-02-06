@@ -1,87 +1,93 @@
-/// Flutter Foundation Models - A Flutter plugin for Apple's on-device Foundation Models.
+/// Flutter Foundation Models - A direct port of Apple's Foundation Models framework.
 ///
 /// This package provides a Flutter interface to Apple's on-device language model,
-/// available on iOS 26+ and macOS 26+. It enables text generation, structured
-/// output, streaming responses, and tool use.
+/// available on iOS 26+ and macOS 26+. The API mirrors Swift's native Foundation
+/// Models framework as closely as possible.
+///
+/// ## Design Philosophy
+///
+/// This package is a **direct port of Swift's Foundation Models API**:
+///
+/// | Swift | Dart |
+/// |-------|------|
+/// | `SystemLanguageModel.default` | `SystemLanguageModel.defaultModel` |
+/// | `session.respond(to:)` → `Response<String>` | `session.respondTo()` → `TextResponse` |
+/// | `session.respond(to:generating:)` → `Response<T>` | `session.respondToWithSchema()` → `StructuredResponse` |
+/// | `@Generable` macro | `@Generable()` annotation + codegen |
 ///
 /// ## Quick Start
 ///
 /// ```dart
 /// import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 ///
-/// // Check availability and create a session
 /// if (await SystemLanguageModel.isAvailable) {
 ///   final session = await LanguageModelSession.create();
-///
-///   // Generate text
 ///   final response = await session.respondTo("What is Flutter?");
 ///   print(response.content);
-///
-///   // Clean up
 ///   session.dispose();
 /// }
 /// ```
 ///
 /// ## Structured Output
 ///
-/// Define your data models with the @Generable annotation:
+/// Define data models with `@Generable`:
 ///
 /// ```dart
-/// @Generable()
-/// class MovieRecommendation {
+/// @Generable(description: "A movie recommendation")
+/// class Movie {
 ///   @Guide(description: "Movie title")
 ///   final String title;
 ///
 ///   @Guide(description: "Year released")
 ///   final int year;
 ///
-///   MovieRecommendation({required this.title, required this.year});
+///   Movie({required this.title, required this.year});
 /// }
 /// ```
 ///
-/// Then generate structured content:
+/// Generate structured content:
 ///
 /// ```dart
 /// final response = await session.respondToWithSchema(
 ///   "Recommend a sci-fi movie",
-///   schema: $MovieRecommendationGenerable.generationSchema,
+///   schema: $MovieGenerable.generationSchema,
 /// );
-/// final movie = $MovieRecommendationGenerable.fromGeneratedContent(response.content);
+/// final movie = $MovieGenerable.fromGeneratedContent(response.content);
 /// print('${movie.title} (${movie.year})');
 /// ```
 ///
 /// ## Generating Lists
 ///
-/// Generate multiple items using `GenerationSchema.array`:
+/// Generate arrays using `GenerationSchema.array`:
 ///
 /// ```dart
 /// final response = await session.respondToWithSchema(
 ///   "Recommend 3 sci-fi movies",
 ///   schema: GenerationSchema.array(
-///     $MovieRecommendationGenerable.generationSchema,
+///     $MovieGenerable.generationSchema,
 ///     minimumElements: 3,
-///     maximumElements: 3,
 ///   ),
 /// );
-/// final movies = response.content.toList($MovieRecommendationGenerable.fromGeneratedContent);
-/// for (final movie in movies) {
-///   print('${movie.title} (${movie.year})');
-/// }
+/// final movies = response.content.toList($MovieGenerable.fromGeneratedContent);
 /// ```
 ///
 /// ## Streaming
 ///
-/// For real-time UI updates during generation:
+/// For real-time UI updates:
 ///
 /// ```dart
-/// final stream = session.streamResponseToWithSchema(
+/// // Text streaming
+/// session.streamResponseTo("Tell me a story").listen((text) {
+///   print(text);
+/// });
+///
+/// // Structured streaming
+/// session.streamResponseToWithSchema(
 ///   "Generate a story",
 ///   schema: $StoryGenerable.generationSchema,
-/// );
-///
-/// stream.listen((partial) {
+/// ).listen((partial) {
 ///   final story = $StoryGenerable.fromPartialGeneratedContent(partial);
-///   print(story.text ?? "Loading...");
+///   print(story.title ?? "Loading...");
 /// });
 /// ```
 ///
@@ -102,12 +108,37 @@
 ///
 ///   @override
 ///   Future<GeneratedContent> call(GeneratedContent arguments) async {
-///     // Fetch real weather data...
-///     return WeatherResult(...).toGeneratedContent();
+///     final args = $WeatherArgsGenerable.fromGeneratedContent(arguments);
+///     return WeatherResult(city: args.city, temp: 72).toGeneratedContent();
 ///   }
 /// }
 ///
 /// final session = await LanguageModelSession.create(tools: [WeatherTool()]);
+/// ```
+///
+/// ## Transcripts
+///
+/// Persist and restore conversation history:
+///
+/// ```dart
+/// final transcript = await session.transcript;
+/// final json = transcript.toJson();  // Store this
+///
+/// // Later, restore:
+/// final restored = Transcript.fromJson(json);
+/// final newSession = await LanguageModelSession.createWithTranscript(
+///   transcript: restored,
+/// );
+/// ```
+///
+/// ## Error Handling
+///
+/// ```dart
+/// try {
+///   final response = await session.respondTo("...");
+/// } on GenerationException catch (e) {
+///   print('${e.type}: ${e.message}');
+/// }
 /// ```
 library flutter_foundation_models;
 

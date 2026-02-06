@@ -2,28 +2,45 @@
 
 [![pub package](https://img.shields.io/pub/v/flutter_foundation_models.svg)](https://pub.dev/packages/flutter_foundation_models)
 
-A Flutter plugin for Apple's on-device Foundation Models, available on iOS 26+ and macOS 26+.
+A Flutter plugin providing a direct port of Apple's Foundation Models framework for on-device AI, available on iOS 26+ and macOS 26+.
+
+## Design Philosophy
+
+This package aims to be a **direct port of Swift's Foundation Models API** to Dart/Flutter. The API design mirrors Swift's native interfaces as closely as possible given Flutter's constraints:
+
+| Swift | Dart |
+|-------|------|
+| `SystemLanguageModel.default` | `SystemLanguageModel.defaultModel` |
+| `SystemLanguageModel(useCase:guardrails:)` | `SystemLanguageModel.create(useCase:guardrails:)` |
+| `LanguageModelSession(model:tools:instructions:)` | `LanguageModelSession.create(model:tools:instructions:)` |
+| `session.respond(to:)` → `Response<String>` | `session.respondTo()` → `TextResponse` |
+| `session.respond(to:generating:)` → `Response<T>` | `session.respondToWithSchema()` → `StructuredResponse` |
+| `session.streamResponse(to:)` | `session.streamResponseTo()` |
+| `session.transcript` | `session.transcript` |
+| `@Generable` macro | `@Generable()` annotation + codegen |
+| `#Guide` macro | `@Guide()` annotation |
+
+When learning this package, you can reference [Apple's Foundation Models documentation](https://developer.apple.com/documentation/foundationmodels) - the concepts translate directly.
 
 ## Features
 
-- **Text Generation** - Generate natural language responses
-- **Structured Output** - Generate typed Dart objects with schema validation
-- **Streaming** - Real-time streaming for progressive UI updates (text and structured)
-- **Tool Use** - Let the model call your functions to fetch data or perform actions
+- **Text Generation** - Generate natural language responses with `respondTo()`
+- **Structured Output** - Generate typed Dart objects with `respondToWithSchema()`
+- **List Generation** - Generate arrays of objects with `GenerationSchema.array()`
+- **Streaming** - Real-time streaming for text and structured content
+- **Tool Use** - Let the model call your Dart functions
+- **Transcripts** - Access, persist, and restore conversation history
 - **Generation Guides** - Constrain output with patterns, ranges, and enums
 - **Model Configuration** - Custom adapters, use cases, and guardrails
+- **Error Handling** - Typed exceptions matching Swift's `GenerationError`
 
 ## Requirements
 
-- iOS 16.0+ (Foundation Models API requires iOS 26.0+ at runtime)
+- iOS 16.0+ / macOS (Foundation Models API requires iOS/macOS 26+ at runtime)
 - Flutter 3.22+
-- Xcode 26+ (for iOS 26 SDK)
+- Xcode 26+ (for iOS/macOS 26 SDK)
 
-**Note:** The package can be added to apps targeting iOS 16+, but the Foundation Models API is only available on iOS 26+. Use `SystemLanguageModel.isAvailable` to check availability at runtime.
-
-## Package Manager Support
-
-This plugin supports both **Swift Package Manager** and **CocoaPods**. SPM is recommended for new projects and provides faster build times.
+**Note:** The package can be added to apps targeting iOS 16+, but the Foundation Models API is only available at runtime on iOS 26+. Use `SystemLanguageModel.isAvailable` to check availability.
 
 ## Installation
 
@@ -31,7 +48,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_foundation_models: ^0.2.0
+  flutter_foundation_models: ^0.3.0
 
 dev_dependencies:
   flutter_foundation_models_gen: ^0.1.0
@@ -42,68 +59,41 @@ dev_dependencies:
 
 ### Check Availability
 
-Before using Foundation Models, check if the API is available:
-
 ```dart
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 
 if (await SystemLanguageModel.isAvailable) {
-  // Foundation Models is available, show AI features
+  // Foundation Models is available
 } else {
-  // Not available, hide AI features or show fallback
-}
-
-// For detailed availability info:
-final availability = await SystemLanguageModel.availability;
-if (!availability.isAvailable) {
+  // Not available - check detailed reason
+  final availability = await SystemLanguageModel.availability;
   print('Unavailable: ${availability.unavailableReason}');
 }
 ```
 
-### Basic Text Generation
+### Text Generation
 
 ```dart
-import 'package:flutter_foundation_models/flutter_foundation_models.dart';
-
-// Check availability first
-if (!await SystemLanguageModel.isAvailable) {
-  print('Foundation Models not available on this device');
-  return;
-}
-
 final session = await LanguageModelSession.create();
 
 final response = await session.respondTo("What is Flutter?");
-print(response);
+print(response.content);  // The generated text
+print(response.transcriptEntries.length);  // Entries created during this response
 
-// Don't forget to dispose
 session.dispose();
-```
-
-### Text Streaming
-
-For real-time text output:
-
-```dart
-final session = await LanguageModelSession.create();
-
-final stream = session.streamResponseTo("Tell me a joke");
-stream.listen((text) {
-  print(text); // Progressively prints as text is generated
-});
 ```
 
 ### Structured Output
 
-Define your data model:
+Define your data model with `@Generable`:
 
 ```dart
 import 'package:flutter_foundation_models/flutter_foundation_models.dart';
 
 part 'movie.g.dart';
 
-@Generable()
-class MovieRecommendation {
+@Generable(description: "A movie recommendation")
+class Movie {
   @Guide(description: "The movie title")
   final String title;
 
@@ -113,15 +103,11 @@ class MovieRecommendation {
   @Guide(description: "Brief plot summary")
   final String summary;
 
-  MovieRecommendation({
-    required this.title,
-    required this.year,
-    required this.summary,
-  });
+  Movie({required this.title, required this.year, required this.summary});
 }
 ```
 
-Run the code generator:
+Run code generation:
 
 ```bash
 dart run build_runner build
@@ -132,107 +118,85 @@ Generate structured content:
 ```dart
 final session = await LanguageModelSession.create();
 
-final content = await session.respondToWithSchema(
+final response = await session.respondToWithSchema(
   "Recommend a sci-fi movie from the 1980s",
-  schema: $MovieRecommendationGenerable.generationSchema,
+  schema: $MovieGenerable.generationSchema,
 );
 
-final movie = $MovieRecommendationGenerable.fromGeneratedContent(content);
+final movie = $MovieGenerable.fromGeneratedContent(response.content);
 print('${movie.title} (${movie.year})');
 print(movie.summary);
+
+// Access raw content and transcript
+print(response.rawContent);  // Pre-transformation content
+print(response.transcriptEntries);  // Conversation entries
+```
+
+### Generating Lists
+
+Generate multiple items using `GenerationSchema.array`:
+
+```dart
+final response = await session.respondToWithSchema(
+  "Recommend 3 sci-fi movies",
+  schema: GenerationSchema.array(
+    $MovieGenerable.generationSchema,
+    minimumElements: 3,
+    maximumElements: 3,
+  ),
+);
+
+final movies = response.content.toList($MovieGenerable.fromGeneratedContent);
+for (final movie in movies) {
+  print('${movie.title} (${movie.year})');
+}
 ```
 
 ### Streaming
 
-For real-time UI updates:
+#### Text Streaming
 
 ```dart
-final stream = session.streamResponseToWithSchema(
-  "Write a short story",
-  schema: $StoryGenerable.generationSchema,
-);
-
-stream.listen((partialContent) {
-  final partial = $StoryGenerable.fromPartialGeneratedContent(partialContent);
-  // Update UI with partial.title, partial.content, etc.
-  // Fields are nullable until fully generated
+final stream = session.streamResponseTo("Tell me a story");
+stream.listen((text) {
+  print(text);  // Progressively updates
 });
 ```
 
-### Using Enums
+#### Structured Streaming
 
 ```dart
-@Generable()
-enum Priority { low, medium, high, critical }
+final stream = session.streamResponseToWithSchema(
+  "Generate a story",
+  schema: $StoryGenerable.generationSchema,
+);
 
-@Generable()
-class Task {
-  @Guide(description: "Task description")
-  final String description;
-
-  @Guide(description: "Priority level")
-  final Priority priority;
-
-  Task({required this.description, required this.priority});
-}
+stream.listen((partial) {
+  final story = $StoryGenerable.fromPartialGeneratedContent(partial);
+  print(story.title ?? "Loading title...");
+  print(story.content ?? "Loading content...");
+});
 ```
 
-### Generation Guides
-
-Constrain generated values:
+#### List Streaming
 
 ```dart
-@Generable()
-class Product {
-  @Guide(description: "Product name")
-  final String name;
+final stream = session.streamResponseToWithSchema(
+  "Generate 3 movies",
+  schema: GenerationSchema.array($MovieGenerable.generationSchema),
+);
 
-  @Guide(
-    description: "Price in USD",
-    guides: [GenerationGuide.range(0.01, 10000)],
-  )
-  final double price;
-
-  @Guide(
-    description: "Category",
-    guides: [GenerationGuide.anyOf(["electronics", "clothing", "food"])],
-  )
-  final String category;
-
-  @Guide(
-    description: "Tags for the product",
-    guides: [GenerationGuide.countRange(1, 5)],
-  )
-  final List<String> tags;
-
-  Product({
-    required this.name,
-    required this.price,
-    required this.category,
-    required this.tags,
-  });
-}
+stream.listen((partial) {
+  final movies = partial.toPartialList($MovieGenerable.fromPartialGeneratedContent);
+  for (final movie in movies) {
+    print(movie?.title ?? "Loading...");
+  }
+});
 ```
 
-Available guides:
+## Tool Use
 
-| Guide | Description | Applies To |
-|-------|-------------|------------|
-| `constant(value)` | Exact string value | String |
-| `anyOf(values)` | One of several values | String |
-| `pattern(regex)` | Regex pattern match | String |
-| `minimum(value)` | Minimum value | int, double |
-| `maximum(value)` | Maximum value | int, double |
-| `range(min, max)` | Value range | int, double |
-| `minimumCount(n)` | Min elements | List |
-| `maximumCount(n)` | Max elements | List |
-| `count(n)` | Exact element count | List |
-| `countRange(min, max)` | Element count range | List |
-| `element(guide)` | Apply guide to elements | List |
-
-### Tool Use
-
-Let the model call your functions:
+Let the model call your Dart functions:
 
 ```dart
 // Define tool arguments
@@ -249,11 +213,7 @@ class WeatherResult {
   final String city;
   final double temperature;
   final String condition;
-  WeatherResult({
-    required this.city,
-    required this.temperature,
-    required this.condition,
-  });
+  WeatherResult({required this.city, required this.temperature, required this.condition});
 }
 
 // Implement the tool
@@ -289,87 +249,10 @@ final session = await LanguageModelSession.create(
 final response = await session.respondTo(
   "What's the weather like in San Francisco?",
 );
-// The model will call WeatherTool and use the result in its response
+print(response.content);  // Uses weather data in response
 ```
 
-### Generation Options
-
-Fine-tune generation behavior:
-
-```dart
-final options = GenerationOptions(
-  sampling: SamplingMode.topP(0.9),
-  temperature: 0.7,
-  maximumResponseTokens: 500,
-);
-
-final response = await session.respondTo(
-  "Write a creative story",
-  options: options,
-);
-```
-
-Sampling modes:
-- `SamplingMode.greedy()` - Deterministic, always picks most likely token
-- `SamplingMode.topK(k)` - Sample from top K tokens
-- `SamplingMode.topP(p)` - Sample from tokens with cumulative probability p
-
-### System Instructions
-
-Provide context for the model:
-
-```dart
-final session = await LanguageModelSession.create(
-  instructions: "You are a helpful cooking assistant. "
-      "Provide recipes and cooking tips. "
-      "Always include preparation time and difficulty level.",
-);
-```
-
-### Model Configuration
-
-Configure the language model with custom settings:
-
-```dart
-// Use a specific use case
-final model = await SystemLanguageModel.create(
-  useCase: UseCase.contentTagging,
-);
-
-// Or with custom guardrails
-final model = await SystemLanguageModel.create(
-  guardrails: Guardrails.permissiveContentTransformations,
-);
-
-// Create session with custom model
-final session = await LanguageModelSession.create(model: model);
-
-// Don't forget to dispose both
-session.dispose();
-model.dispose();
-```
-
-### Custom Adapters
-
-Load custom adapters for specialized models:
-
-```dart
-// From a named adapter
-final adapter = await Adapter.create(name: "my-adapter");
-
-// Or from a Flutter asset
-final adapter = await Adapter.fromAsset("assets/my-adapter.mlmodelc");
-
-final model = await SystemLanguageModel.create(adapter: adapter);
-final session = await LanguageModelSession.create(model: model);
-
-// Dispose when done
-session.dispose();
-model.dispose();
-adapter.dispose();
-```
-
-### Transcripts
+## Transcripts
 
 Access and persist conversation history:
 
@@ -384,36 +267,225 @@ await session.respondTo("What's 2+2?");
 final transcript = await session.transcript;
 print('Conversation has ${transcript.length} entries');
 
+// Iterate over entries
+for (final entry in transcript.entries) {
+  switch (entry) {
+    case TranscriptPrompt(:final prompt):
+      print('User: $prompt');
+    case TranscriptResponse(:final content):
+      print('Assistant: $content');
+    case TranscriptToolCalls(:final toolCalls):
+      print('Tool calls: ${toolCalls.length}');
+    case TranscriptToolOutput(:final toolName, :final output):
+      print('Tool $toolName returned: $output');
+    case TranscriptInstructions(:final instructions):
+      print('Instructions: $instructions');
+    case TranscriptUnknown():
+      print('Unknown entry type');
+  }
+}
+
 // Serialize for storage
 final json = transcript.toJson();
-// Store json to disk, database, etc.
 
 // Later, restore and continue the conversation
 final restored = Transcript.fromJson(json);
 final newSession = await LanguageModelSession.createWithTranscript(
   transcript: restored,
 );
-await newSession.respondTo("What did we talk about?");
 ```
 
-### Session Optimization
+## Generation Guides
 
-Reduce latency with prewarming:
+Constrain generated values with `@Guide`:
+
+```dart
+@Generable()
+class Product {
+  @Guide(description: "Product name")
+  final String name;
+
+  @Guide(
+    description: "Price in USD",
+    guides: [GenerationGuide.range(0.01, 10000)],
+  )
+  final double price;
+
+  @Guide(
+    description: "Category",
+    guides: [GenerationGuide.anyOf(["electronics", "clothing", "food"])],
+  )
+  final String category;
+
+  @Guide(
+    description: "Tags",
+    guides: [GenerationGuide.countRange(1, 5)],
+  )
+  final List<String> tags;
+
+  Product({required this.name, required this.price, required this.category, required this.tags});
+}
+```
+
+### Available Guides
+
+| Guide | Description | Applies To |
+|-------|-------------|------------|
+| `constant(value)` | Exact string value | String |
+| `anyOf(values)` | One of several string values | String |
+| `pattern(regex)` | Regex pattern match | String |
+| `minimum(value)` | Minimum numeric value | int, double |
+| `maximum(value)` | Maximum numeric value | int, double |
+| `range(min, max)` | Numeric value range | int, double |
+| `minimumCount(n)` | Minimum element count | List |
+| `maximumCount(n)` | Maximum element count | List |
+| `count(n)` | Exact element count | List |
+| `countRange(min, max)` | Element count range | List |
+| `element(guide)` | Apply guide to list elements | List |
+
+## Generation Options
+
+Fine-tune generation behavior:
+
+```dart
+final options = GenerationOptions(
+  sampling: TopPSamplingMode(probabilityThreshold: 0.9),
+  temperature: 0.7,
+  maximumResponseTokens: 500,
+);
+
+final response = await session.respondTo(
+  "Write a creative story",
+  options: options,
+);
+```
+
+### Sampling Modes
+
+| Mode | Description |
+|------|-------------|
+| `GreedySamplingMode()` | Deterministic, always picks most likely token |
+| `TopKSamplingMode(k: 40)` | Sample from top K tokens |
+| `TopPSamplingMode(probabilityThreshold: 0.9)` | Sample from tokens with cumulative probability p |
+
+Add `seed` parameter to any sampling mode for reproducible results.
+
+## Model Configuration
+
+### System Instructions
+
+```dart
+final session = await LanguageModelSession.create(
+  instructions: "You are a helpful cooking assistant. "
+      "Provide recipes and cooking tips.",
+);
+```
+
+### Use Cases
+
+```dart
+final model = await SystemLanguageModel.create(
+  useCase: UseCase.contentTagging,  // or UseCase.general (default)
+);
+
+final session = await LanguageModelSession.create(model: model);
+
+session.dispose();
+model.dispose();
+```
+
+### Guardrails
+
+```dart
+final model = await SystemLanguageModel.create(
+  guardrails: Guardrails.permissiveContentTransformations,
+);
+```
+
+### Custom Adapters
+
+```dart
+// From a named adapter
+final adapter = await Adapter.create(name: "my-adapter");
+
+// Or from a Flutter asset
+final adapter = await Adapter.fromAsset("assets/my-adapter.mlmodelc");
+
+final model = await SystemLanguageModel.create(adapter: adapter);
+final session = await LanguageModelSession.create(model: model);
+
+// Dispose all resources
+session.dispose();
+model.dispose();
+adapter.dispose();
+```
+
+## Session Optimization
+
+### Prewarming
+
+Reduce latency by prewarming the session before the user starts typing:
 
 ```dart
 final session = await LanguageModelSession.create();
 
-// Prewarm the session before the user starts typing
+// Prewarm with no specific prefix
 await session.prewarm();
 
 // Or prewarm with a known prompt prefix
 await session.prewarm(promptPrefix: "Translate to Spanish: ");
+```
 
-// Check if session is currently generating
+### Checking Session State
+
+```dart
 if (await session.isResponding) {
-  print("Session is busy");
+  print("Session is currently generating a response");
 }
 ```
+
+## Error Handling
+
+Generation errors are thrown as `GenerationException`:
+
+```dart
+try {
+  final response = await session.respondTo("...");
+} on GenerationException catch (e) {
+  switch (e.type) {
+    case GenerationErrorType.exceededContextWindowSize:
+      print("Context too long: ${e.message}");
+    case GenerationErrorType.guardrailViolation:
+      print("Content policy violation: ${e.message}");
+    case GenerationErrorType.rateLimited:
+      print("Rate limited: ${e.message}");
+    case GenerationErrorType.refusal:
+      print("Model refused: ${e.message}");
+    default:
+      print("Error: ${e.message}");
+  }
+
+  // Debug info if available
+  if (e.debugDescription != null) {
+    print("Debug: ${e.debugDescription}");
+  }
+}
+```
+
+### Error Types
+
+| Type | Description |
+|------|-------------|
+| `exceededContextWindowSize` | Context window limit exceeded |
+| `assetsUnavailable` | Required model assets unavailable |
+| `guardrailViolation` | Content policy violated |
+| `unsupportedGuide` | Unsupported generation guide used |
+| `unsupportedLanguageOrLocale` | Language/locale not supported |
+| `decodingFailure` | Failed to decode model response |
+| `rateLimited` | Rate limit exceeded |
+| `concurrentRequests` | Concurrent request limit exceeded |
+| `refusal` | Model refused to generate |
+| `unknown` | Unknown error |
 
 ## API Reference
 
@@ -421,32 +493,54 @@ if (await session.isResponding) {
 
 | Member | Description |
 |--------|-------------|
-| `SystemLanguageModel.isAvailable` | Check if API is available (static) |
-| `SystemLanguageModel.availability` | Get detailed availability info (static) |
-| `SystemLanguageModel.defaultModel` | Access the default model (static) |
-| `SystemLanguageModel.create()` | Create model with configuration (static) |
-| `dispose()` | Release resources |
+| `SystemLanguageModel.isAvailable` | Check if API is available (static, async) |
+| `SystemLanguageModel.availability` | Get detailed availability info (static, async) |
+| `SystemLanguageModel.defaultModel` | The default system model (static) |
+| `SystemLanguageModel.create()` | Create custom model (static, async) |
+| `dispose()` | Release resources (no-op for defaultModel) |
 
 ### Adapter
 
 | Member | Description |
 |--------|-------------|
-| `Adapter.create(name:)` | Create adapter by name (static) |
-| `Adapter.fromAsset(assetPath)` | Create adapter from Flutter asset (static) |
+| `Adapter.create(name:)` | Create adapter by name (static, async) |
+| `Adapter.fromAsset(path)` | Create adapter from Flutter asset (static, async) |
 | `dispose()` | Release resources |
 
 ### LanguageModelSession
 
 | Member | Description |
 |--------|-------------|
-| `LanguageModelSession.create()` | Create a new session (static) |
-| `respondTo(prompt)` | Generate text response |
-| `streamResponseTo(prompt)` | Stream text response |
-| `respondToWithSchema(prompt, schema:)` | Generate structured content |
-| `streamResponseToWithSchema(prompt, schema:)` | Stream structured content |
+| `LanguageModelSession.create()` | Create new session (static, async) |
+| `LanguageModelSession.createWithTranscript()` | Create session from transcript (static, async) |
+| `respondTo(prompt)` | Generate text → `TextResponse` |
+| `streamResponseTo(prompt)` | Stream text → `Stream<String>` |
+| `respondToWithSchema(prompt, schema:)` | Generate structured → `StructuredResponse` |
+| `streamResponseToWithSchema(prompt, schema:)` | Stream structured → `Stream<GeneratedContent>` |
+| `transcript` | Get conversation transcript (async) |
 | `prewarm()` | Reduce latency for first request |
-| `isResponding` | Check if session is generating |
+| `isResponding` | Check if currently generating (async) |
 | `dispose()` | Release resources |
+
+### Response Types
+
+| Type | Properties |
+|------|------------|
+| `TextResponse` | `content`, `transcriptEntries` |
+| `StructuredResponse` | `content`, `rawContent`, `transcriptEntries` |
+
+### GenerationSchema
+
+| Member | Description |
+|--------|-------------|
+| `GenerationSchema.array(schema)` | Create array schema from item schema |
+
+### GeneratedContent
+
+| Member | Description |
+|--------|-------------|
+| `toList(fromContent)` | Convert array content to typed `List<T>` |
+| `toPartialList(fromPartialContent)` | Convert partial array for streaming |
 
 ### Generated Extensions
 
@@ -457,8 +551,12 @@ For a class `MyClass` annotated with `@Generable()`:
 | `$MyClassGenerable.generationSchema` | Schema for generation |
 | `$MyClassGenerable.fromGeneratedContent(content)` | Convert to typed object |
 | `$MyClassGenerable.fromPartialGeneratedContent(content)` | Convert partial (streaming) |
-| `myInstance.toGeneratedContent()` | Convert to GeneratedContent |
-| `$MyClassPartial` | Partial class for streaming |
+| `myInstance.toGeneratedContent()` | Convert instance to GeneratedContent |
+| `$MyClassPartial` | Partial type for streaming (nullable fields) |
+
+## Package Manager Support
+
+This plugin supports both **Swift Package Manager** and **CocoaPods**. SPM is recommended for new projects and provides faster build times.
 
 ## License
 

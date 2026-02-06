@@ -1,9 +1,30 @@
+## 0.3.0
+
+### Breaking Changes
+- `respondTo()` now returns `TextResponse` instead of `String`
+  - Use `response.content` to get the text
+  - Also provides `response.transcriptEntries` for entries created during this response
+- `respondToWithSchema()` now returns `StructuredResponse` instead of `GeneratedContent`
+  - Use `response.content` to get the generated content
+  - Also provides `response.rawContent` and `response.transcriptEntries`
+
+### New Features
+- **Response wrappers** - `TextResponse` and `StructuredResponse` provide content plus metadata
+- **List generation** - Generate arrays of @Generable types
+  - `GenerationSchema.array(schema)` - Create array schema from item schema
+  - `content.toList(fromContent)` - Convert array content to typed `List<T>`
+  - `content.toPartialList(fromPartialContent)` - For streaming arrays
+- **Generation errors** - Typed `GenerationException` matching Swift's `GenerationError`
+  - `GenerationErrorType` enum with all Swift error types
+  - `debugDescription` for additional debugging info
+
 ## 0.2.2
 
 - **Transcript support** - Access conversation history and continue sessions
   - `session.transcript` - Get the current conversation transcript
   - `LanguageModelSession.createWithTranscript()` - Create a session from a previous transcript
   - `Transcript.toJson()` / `Transcript.fromJson()` - Serialize/deserialize transcripts
+  - Type-safe transcript entries: `TranscriptPrompt`, `TranscriptResponse`, `TranscriptToolCalls`, `TranscriptToolOutput`, `TranscriptInstructions`
 
 ## 0.2.1
 

@@ -2,11 +2,19 @@
 
 Annotations for [flutter_foundation_models](https://pub.dev/packages/flutter_foundation_models).
 
-This package provides the `@Generable` and `@Guide` annotations used to define structured output schemas for Apple's on-device Foundation Models.
+This package provides the `@Generable` and `@Guide` annotations - Dart equivalents of Swift's `@Generable` macro and `#Guide` expression macro from Apple's Foundation Models framework.
 
 ## Installation
 
 This package is automatically included when you add `flutter_foundation_models` to your project. You typically don't need to add it directly.
+
+## Swift to Dart Mapping
+
+| Swift | Dart |
+|-------|------|
+| `@Generable` macro | `@Generable()` annotation |
+| `#Guide("description")` | `@Guide(description: "...")` |
+| `#Guide(range: 0...100)` | `@Guide(guides: [GenerationGuide.range(0, 100)])` |
 
 ## Usage
 
@@ -56,7 +64,13 @@ class Product {
   )
   final String category;
 
-  Product({required this.name, required this.price, required this.category});
+  @Guide(
+    description: "Tags",
+    guides: [GenerationGuide.countRange(1, 5)],
+  )
+  final List<String> tags;
+
+  Product({required this.name, required this.price, required this.category, required this.tags});
 }
 ```
 
@@ -88,8 +102,9 @@ dart run build_runner build
 ```
 
 This generates:
-- `$ClassNameGenerable` extension with schema and converters
-- `$ClassNamePartial` class for streaming responses
+- `$ClassNameGenerable` extension with `generationSchema`, `fromGeneratedContent()`, `fromPartialGeneratedContent()`
+- `$ClassNamePartial` class for streaming responses (all fields nullable)
+- `toGeneratedContent()` extension method on instances
 
 ## License
 
